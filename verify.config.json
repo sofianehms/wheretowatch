@@ -1,6 +1,14 @@
 {
   "root": ".",
-  "pages": ["/"],
+  "pages": [
+    "/",
+    { "path": "/test/states.html?view=components", "lighthouse": false },
+    { "path": "/test/states.html?view=search", "lighthouse": false },
+    { "path": "/test/states.html?view=title", "lighthouse": false },
+    { "path": "/test/states.html?view=settings", "lighthouse": false },
+    { "path": "/test/states.html?view=banners", "lighthouse": false },
+    { "path": "/test/states.html?view=install", "lighthouse": false }
+  ],
   "viewports": [
     { "name": "mobile", "width": 390, "height": 844, "mobile": true },
     { "name": "desktop", "width": 1280, "height": 800, "mobile": false }
