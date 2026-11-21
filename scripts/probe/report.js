@@ -39,8 +39,13 @@ function rateRow(label, observations) {
 function languageReport({ region, sampleSize, selected, discovery, titles }) {
   const sample = titles.map((title) => {
     const options = title.body?.streamingOptions;
-    const usable = title.status === 200 && options && typeof options === 'object' && !Array.isArray(options);
-    return { ...title, usable, observations: usable ? languagePresence(title.body) : [] };
+    const expectedId = 'movie/' + title.id;
+    const matched = title.body?.tmdbId === expectedId;
+    const mismatch = title.status === 200 && title.body !== undefined && !matched
+      ? 'TMDB ID mismatch (expected ' + expectedId + ').' : undefined;
+    const usable = title.status === 200 && matched && options && typeof options === 'object' && !Array.isArray(options);
+    const anomaly = [title.anomaly, mismatch].filter(Boolean).join(' ');
+    return { ...title, anomaly, usable, observations: usable ? languagePresence(title.body) : [] };
   });
   const usableCount = sample.filter(({ usable }) => usable).length;
   const contributingCount = sample.filter(({ observations }) => observations.length).length;
@@ -54,7 +59,7 @@ function languageReport({ region, sampleSize, selected, discovery, titles }) {
     '- Discovery region: ' + region,
     '- Distinct movies selected: ' + selected + '/' + sampleSize,
     '- Streaming Availability requests sent: ' + titles.length + '/' + sampleSize,
-    '- Show responses with a streaming options map: ' + usableCount + '/' + sampleSize,
+    '- Matching show responses with a streaming options map: ' + usableCount + '/' + sampleSize,
     '- Last discovery response: ' + (discovery?.status ?? 'not observed') + ' (' + (discovery?.anomaly ?? 'no anomaly') + ')',
     ...(selected < sampleSize ? ['- No show requests sent because discovery did not fill the sample.'] : []),
     '',

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
@@ -87,7 +89,8 @@ test('renders fixture findings without raw values or a fictitious key in headers
     region: 'FR',
     v05: {
       region: 'FR', sampleSize: 2, selected: 2,
-      titles: [show, series].map((body, index) => ({ ...observed('Show', body), id: index + 1 })),
+      titles: [show, { ...series, tmdbId: 'movie/900002' }].map((body, index) =>
+        ({ ...observed('Show', body), id: 900001 + index })),
     },
     v18: observed('GET /v4/shows/search/title', [show, series], { 'x-quota-remaining': '88' }),
   };
@@ -110,8 +113,8 @@ test('renders fixture findings without raw values or a fictitious key in headers
     '| Overall | 1/3 (33.3%) | 1/3 (33.3%) | 1/3 (33.3%) |',
     '| FR | 0/2 (0.0%) | 0/2 (0.0%) | 0/2 (0.0%) |',
     '| US | 1/1 (100.0%) | 1/1 (100.0%) | 1/1 (100.0%) |',
-    '| 1 (HTTP 200) | 1/2 (50.0%) | 1/2 (50.0%) | 1/2 (50.0%) |',
-    '| 1 / FR | 0/1 (0.0%) | 0/1 (0.0%) | 0/1 (0.0%) |',
+    '| 900001 (HTTP 200) | 1/2 (50.0%) | 1/2 (50.0%) | 1/2 (50.0%) |',
+    '| 900001 / FR | 0/1 (0.0%) | 0/1 (0.0%) | 0/1 (0.0%) |',
   ];
   for (const row of rates) assert.ok(report.includes(row), row);
   assert.match(report, /Measurement status: Complete\n- Titles contributing to the observed rates: 2\/2\n/);
@@ -135,16 +138,17 @@ test('renders fixture findings without raw values or a fictitious key in headers
 });
 
 const repo = fileURLToPath(new URL('../', import.meta.url));
-const fetchGuard = 'data:text/javascript,' + encodeURIComponent('globalThis.fetch = () => process.exit(99);');
+const preload = (source) => 'data:text/javascript,' + encodeURIComponent(source);
+const fetchGuard = preload('globalThis.fetch = () => process.exit(99);');
 
-function invokeProbe(args, env = {}, fetchMock = fetchGuard) {
+function invokeProbe(args, env = {}, fetchMock = fetchGuard, cwd = repo) {
   return spawnSync(process.execPath, ['--import', fetchMock, 'scripts/probe-apis.mjs', ...args], {
-    cwd: repo, env, encoding: 'utf8',
+    cwd, env, encoding: 'utf8',
   });
 }
 
 test('refuses V-05 and V-18 before any SA fetch without confirmation', () => {
-  const fetchMock = 'data:text/javascript,' + encodeURIComponent(`
+  const fetchMock = preload(`
     let saCalls = 0;
     globalThis.fetch = async (url) => {
       if (new URL(url).hostname === 'api.movieofthenight.com') saCalls++;
@@ -158,6 +162,65 @@ test('refuses V-05 and V-18 before any SA fetch without confirmation', () => {
     assert.ok(result.stdout.includes(measurement + ': ' + count + ' additional'));
     assert.match(result.stdout, /^SA calls: 0$/m);
     assert.match(result.stderr, /--confirm-sa-calls/);
+  }
+});
+
+test('runs confirmed V-05 and V-18 and excludes responses for the wrong title', async () => {
+  // Keep the report outside the probe copy so the real CLI output guard still runs.
+  const scratch = await mkdtemp(join(repo, '.probe-test-'));
+  try {
+    const probe = join(scratch, 'probe');
+    await cp(join(repo, 'scripts'), join(probe, 'scripts'), { recursive: true });
+    await cp(join(repo, 'package.json'), join(probe, 'package.json'));
+    const output = join(scratch, 'report.md');
+    const ids = Array.from({ length: 20 }, (_, index) => 900001 + index);
+    const fetchMock = preload(`
+      const [first, ...rest] = ${JSON.stringify(ids)};
+      const fixture = ${JSON.stringify(show)};
+      const requests = [];
+      globalThis.fetch = async (url, { method }) => {
+        const { pathname, search, searchParams } = new URL(url);
+        if (pathname.startsWith('/v4/') || pathname === '/3/discover/movie') {
+          requests.push(pathname + search);
+        }
+        if (method === 'OPTIONS') return new Response(null, { status: 204 });
+        let body = {};
+        if (pathname === '/3/discover/movie') {
+          const ids = searchParams.get('page') === '1' ? [first, first] : [first, ...rest, 999999];
+          body = { results: ids.map((id) => ({ id })), total_pages: 2 };
+        } else if (pathname === '/v4/shows/search/title') {
+          body = [fixture];
+        } else if (pathname.startsWith('/v4/shows/movie/')) {
+          const id = Number(pathname.split('/').at(-1));
+          const returned = { [rest[0]]: 'movie/' + first, [rest[1]]: null, [rest[2]]: 'tv/' + rest[2] };
+          body = { ...fixture, tmdbId: Object.hasOwn(returned, id) ? returned[id] : 'movie/' + id };
+          if (body.tmdbId === null) delete body.tmdbId;
+        }
+        return Response.json(body, { headers: { 'access-control-allow-origin': '*' } });
+      };
+      process.on('exit', () => console.log(JSON.stringify(requests)));
+    `);
+    const result = invokeProbe(
+      ['--v05', '--v18', '--region', 'fr', '--confirm-sa-calls', '--out', output],
+      { TMDB_TOKEN: 'dummy-tmdb', SA_KEY: 'dummy-sa' }, fetchMock, probe,
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout.trim().split('\n').at(-1)), [
+      '/v4/shows/movie/550', '/v4/countries', '/v4/shows/movie/550',
+      '/v4/shows/search/title?title=Fight+Club&country=fr',
+      '/3/discover/movie?with_watch_providers=8&watch_region=FR&page=1',
+      '/3/discover/movie?with_watch_providers=8&watch_region=FR&page=2',
+      ...ids.map((id) => '/v4/shows/movie/' + id),
+    ]);
+
+    const report = await readFile(output, 'utf8');
+    assert.match(report, /Measurement status: Incomplete\n- Titles contributing to the observed rates: 17\/20/);
+    assert.ok(report.includes('| Overall |' + ' 17/34 (50.0%) |'.repeat(3)));
+    for (const id of ids.slice(1, 4)) {
+      assert.ok(report.includes('| ' + id + ' (HTTP 200, TMDB ID mismatch (expected movie/' + id + ').) | n/a | n/a | n/a |'));
+    }
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
   }
 });
 
