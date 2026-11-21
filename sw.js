@@ -1,6 +1,9 @@
 // Minimal offline shell cache. A new worker waits and activates on the next launch. Bump CACHE when shipped files change.
-const CACHE = 'shell-v2';
-const SHELL = ['./', 'index.html', 'design/tokens.css', 'src/styles.css', 'src/main.js', 'icon.svg', 'manifest.webmanifest'];
+const CACHE = 'shell-v3';
+const SHELL = [
+  './', 'index.html', 'design/tokens.css', 'src/styles.css', 'src/main.js', 'manifest.webmanifest',
+  'icon.svg', 'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
+];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
