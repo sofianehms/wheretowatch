@@ -1,0 +1,111 @@
+const prefix = 'wtw.';
+const providers = ['tmdb', 'sa'];
+const preferences = ['country', 'service', 'theme', 'lang'];
+
+function browserStorage() {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function defaultCountry(navigatorLike) {
+  try {
+    return new Intl.Locale(navigatorLike.language).region?.toLowerCase() ?? 'us';
+  } catch {
+    return 'us';
+  }
+}
+
+function storageName(names, name, segment = '') {
+  if (!names.includes(name)) throw new TypeError('Unknown settings name.');
+  return prefix + segment + name;
+}
+
+export function createSettings({
+  storage = browserStorage(), navigatorLike = globalThis.navigator, cache, quota,
+} = {}) {
+  const defaults = { country: defaultCountry(navigatorLike), service: null, theme: 'dark', lang: null };
+  let persistenceRequested = false;
+
+  function read(name) {
+    try {
+      return storage?.getItem(name) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  function write(name, value) {
+    try {
+      storage.setItem(name, value);
+    } catch {
+      throw new Error('Could not save settings.');
+    }
+  }
+
+  function remove(name) {
+    try {
+      storage.removeItem(name);
+    } catch {
+      throw new Error('Could not remove settings.');
+    }
+  }
+
+  async function requestPersistence() {
+    try {
+      await navigatorLike?.storage?.persist?.();
+    } catch {
+      // The saved key remains usable without persistent storage.
+    }
+  }
+
+  function getKey(provider) {
+    return read(storageName(providers, provider, 'key.'));
+  }
+
+  function clearStorage() {
+    for (let index = storage.length - 1; index >= 0; index -= 1) {
+      const name = storage.key(index);
+      if (name?.startsWith(prefix)) storage.removeItem(name);
+    }
+  }
+
+  function clearAll() {
+    let failed = false;
+    // Reset quota before removing storage entries because reset writes to storage.
+    for (const clear of [() => cache?.clear(), () => quota?.reset(), clearStorage]) {
+      try {
+        clear();
+      } catch {
+        failed = true;
+      }
+    }
+    if (failed) throw new Error('Could not clear all settings.');
+  }
+
+  return {
+    getKey,
+    setKey(provider, value) {
+      write(storageName(providers, provider, 'key.'), value);
+      if (!persistenceRequested) {
+        persistenceRequested = true;
+        void requestPersistence();
+      }
+    },
+    removeKey(provider) {
+      remove(storageName(providers, provider, 'key.'));
+    },
+    hasKey: (provider) => Boolean(getKey(provider)),
+    getPref(name) {
+      return read(storageName(preferences, name)) ?? defaults[name];
+    },
+    setPref(name, value) {
+      const key = storageName(preferences, name);
+      if (value === null) remove(key);
+      else write(key, value);
+    },
+    clearAll,
+  };
+}
