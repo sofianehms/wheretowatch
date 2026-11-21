@@ -8,6 +8,7 @@
     "start": "node scripts/serve.mjs",
     "lint": "node scripts/lint.mjs",
     "test": "node scripts/run-tests.mjs",
+    "coverage": "node scripts/coverage.mjs",
     "verify": "node scripts/verify.mjs"
   },
   "engines": {
