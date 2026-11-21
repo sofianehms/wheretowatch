@@ -29,11 +29,11 @@ export class HttpError extends Error {
 }
 
 export function isQuotaExhausted(status, _headers, body) {
-  // The direct plan suspends access until the next billing cycle. Require an
-  // explicit quota message until the response format is confirmed in AL-1.
+  // The direct plan suspends access until the next billing cycle. Match a
+  // complete monthly exhaustion statement pending response validation in AL-1.
   const message = typeof body === 'string' ? body : body?.message;
   return status === 429 && typeof message === 'string' &&
-    /\b(?:quota\s+(?:(?:has been|is)\s+)?(?:exhausted|exceeded|reached)|(?:exhausted|exceeded|reached)\s+(?:(?:your|the|monthly)\s+)*quota)\b/i.test(message);
+    /^Your monthly quota has been exceeded\.?$/i.test(message.trim());
 }
 
 function retryDelay(headers) {
@@ -62,8 +62,7 @@ async function run(url, signal, timeoutMs, operation) {
   const cancel = () => controller.abort('aborted');
   signal?.addEventListener('abort', cancel, { once: true });
   if (signal?.aborted) cancel();
-  const timer = timeoutMs === undefined ? undefined :
-    setTimeout(() => controller.abort('timeout'), timeoutMs);
+  const timer = setTimeout(() => controller.abort('timeout'), timeoutMs);
   const active = controller.signal;
   let stop;
   try {
@@ -86,12 +85,17 @@ function failureType(status) {
   return 'server';
 }
 
+/**
+ * Returns JSON or throws an HttpError whose type identifies the failure.
+ * The timeout covers fetching, parsing, and any retry wait and is capped at 10 seconds.
+ * An injected sleep(ms, signal) waits in milliseconds and should stop on abort.
+ */
 export async function request(url, {
   headers, signal, timeoutMs = MAX_WAIT_MS, retryOn429 = false,
   fetchImpl = globalThis.fetch, sleep = delay,
 } = {}) {
-  for (let attempt = 0; ; attempt++) {
-    const result = await run(url, signal, Math.min(timeoutMs, MAX_WAIT_MS), async (active) => {
+  return run(url, signal, Math.min(timeoutMs, MAX_WAIT_MS), async (active) => {
+    async function attempt() {
       try {
         if (globalThis.navigator?.onLine === false) return { type: 'offline' };
         const response = await fetchImpl(url, { headers, signal: active });
@@ -109,19 +113,20 @@ export async function request(url, {
       } catch {
         return { type: globalThis.navigator?.onLine === false ? 'offline' : 'network' };
       }
-    });
-
-    if (!result.type) return result.data;
-    if (result.type !== 'rateLimited' || !retryOn429 || attempt > 0) {
-      throw new HttpError(result.type, url, result.status);
     }
 
-    await run(url, signal, undefined, async (active) => {
+    let result = await attempt();
+    if (active.aborted) throw new HttpError(active.reason, url);
+    if (retryOn429 && result.type === 'rateLimited') {
       try {
         await sleep(result.wait, active);
       } catch {
         throw new HttpError('network', url);
       }
-    });
-  }
+      if (active.aborted) throw new HttpError(active.reason, url);
+      result = await attempt();
+    }
+    if (result.type) throw new HttpError(result.type, url, result.status);
+    return result.data;
+  });
 }

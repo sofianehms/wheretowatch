@@ -7,7 +7,7 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-const run = spawnSync(process.execPath, [...process.execArgv, '--test', '--test-reporter=tap', ...files], { encoding: 'utf8' });
+const run = spawnSync(process.execPath, ['--test', '--test-reporter=tap', ...files], { encoding: 'utf8' });
 if (run.stdout) process.stdout.write(run.stdout);
 if (run.stderr) process.stderr.write(run.stderr);
 if (run.error) {

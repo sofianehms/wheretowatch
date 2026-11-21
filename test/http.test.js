@@ -7,7 +7,7 @@ const url = `https://example.test/catalog?filter=${dummyKey}#fragment`;
 const headers = { Authorization: `Bearer ${dummyKey}` };
 
 function response(status, body = {}, headers = {}) {
-  return new Response(JSON.stringify(body), { status, headers });
+  return Response.json(body, { status, headers });
 }
 
 function expectError(type, status) {
@@ -98,9 +98,10 @@ test('stops after a second 429, using the default sleep', async () => {
 
 const quotaFixtures = [
   [429, {}, { message: 'Your monthly quota has been exceeded' }, true],
-  [429, {}, 'Quota exhausted', true],
+  [429, {}, 'Your monthly quota has been exceeded.', true],
   [429, { 'Retry-After': '2' }, { message: 'Too many requests' }, false],
-  [403, {}, { message: 'Quota exceeded' }, false],
+  [429, { 'Retry-After': '2' }, { message: 'Monthly quota reached? No. Slow down and retry.' }, false],
+  [403, {}, { message: 'Your monthly quota has been exceeded' }, false],
   [429, {}, null, false],
 ];
 
@@ -120,6 +121,20 @@ test('distinguishes quota fixtures from ordinary rate limiting', async () => {
   await assert.rejects(request(url, {
     fetchImpl: async () => new Response(quotaFixtures[1][2], { status: 429 }),
   }), expectError('quota', 429));
+});
+
+test('retries a temporary 429 that mentions quota', async () => {
+  const [, fields, body] = quotaFixtures[3];
+  let calls = 0;
+  const waits = [];
+  const data = await request(url, {
+    retryOn429: true,
+    fetchImpl: async () => ++calls === 1 ? response(429, body, fields) : response(200, ['ok']),
+    sleep: async (ms) => { waits.push(ms); },
+  });
+  assert.equal(calls, 2);
+  assert.deepEqual(waits, [2000]);
+  assert.deepEqual(data, ['ok']);
 });
 
 test('reports network failures without surfacing the fetch exception', async () => {
@@ -165,11 +180,52 @@ for (const stage of ['fetch', 'body']) {
 
 test('honors a shorter configured timeout', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const pending = request(url, { timeoutMs: 25, fetchImpl: () => new Promise(() => {}) });
+  let signal;
+  const pending = request(url, {
+    timeoutMs: 25,
+    fetchImpl: (_, options) => {
+      signal = options.signal;
+      return new Promise(() => {});
+    },
+  });
   const check = assert.rejects(pending, expectError('timeout'));
-  t.mock.timers.tick(25);
+  t.mock.timers.tick(24);
+  assert.equal(signal.aborted, false);
+  t.mock.timers.tick(1);
   await check;
 });
+
+for (const [retryAfter, expectedCalls] of [['2', 2], ['10', 1]]) {
+  test(`shares the 10-second deadline with Retry-After ${retryAfter}`, async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const signals = [];
+    const pending = request(url, {
+      retryOn429: true,
+      fetchImpl: (_, { signal }) => {
+        signals.push(signal);
+        return new Promise((resolve) => {
+          if (signals.length === 1) {
+            setTimeout(() => resolve(response(429, {}, { 'Retry-After': retryAfter })), 1000);
+          }
+        });
+      },
+    });
+    const check = assert.rejects(pending, expectError('timeout'));
+    t.mock.timers.tick(1000);
+    await new Promise(setImmediate);
+    t.mock.timers.tick(8999);
+    await new Promise(setImmediate);
+    assert.equal(signals.length, expectedCalls);
+    assert.ok(signals.every((signal) => !signal.aborted));
+    t.mock.timers.tick(1);
+    await new Promise(setImmediate);
+    assert.ok(signals.every((signal) => signal.aborted));
+    await check;
+    t.mock.timers.tick(1000);
+    await new Promise(setImmediate);
+    assert.equal(signals.length, expectedCalls);
+  });
+}
 
 test('reports cancellation before and during fetch without exposing the reason', async (t) => {
   const controller = new AbortController();
