@@ -16,6 +16,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+      - run: npm run coverage
+        continue-on-error: true
       - run: npm run verify
         env:
           CHROME_PATH: /usr/bin/google-chrome
