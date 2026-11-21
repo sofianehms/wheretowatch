@@ -41,6 +41,7 @@
 }
 .verdict__icon { grid-row: span 2; color: var(--color-text-muted); }
 .verdict--available .verdict__icon { color: var(--color-positive); }
+.verdict--absent .verdict__icon { color: var(--color-text-muted); }
 .verdict--unknown .verdict__icon { color: var(--color-caution); }
 .verdict--error .verdict__icon { color: var(--color-danger); }
 .verdict__headline { font-size: var(--text-lg); line-height: var(--leading-tight); font-weight: var(--weight-bold); color: var(--color-text-strong); overflow-wrap: anywhere; }

@@ -9,6 +9,8 @@ const icons = {
   search: 'M21 21l-4.3-4.3M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14z',
   chevron: 'm6 9 6 6 6-6',
   close: 'M18 6 6 18M6 6l12 12',
+  ban: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM5.6 5.6l12.8 12.8',
+  offline: 'M2 8.8a15 15 0 0 1 4-2.4M22 8.8a15 15 0 0 0-9.5-3.7M5 12.9a10 10 0 0 1 5-2.7M19 12.9a10 10 0 0 0-2-1.6M8.5 16.4a5 5 0 0 1 7 0M12 20h.01M2 2l20 20',
 };
 
 function icon(name, size = '') {
@@ -31,6 +33,25 @@ function el(tag, className, text, attributes = {}) {
 }
 
 const variants = ['normal', 'hover', 'focus', 'disabled'];
+
+// Resolve a design token into the computed value a property would take, so checks compare like with like.
+function resolveToken(name, property) {
+  const probe = document.createElement('span');
+  probe.style.setProperty(property, `var(${name})`);
+  document.body.append(probe);
+  const value = getComputedStyle(probe).getPropertyValue(property);
+  probe.remove();
+  return value;
+}
+
+// Fixed widths for the quota bars go through the stylesheet (CSSOM), like the production meter does.
+function fillClass(share) {
+  const name = `sample-fill-${Math.round(share * 100)}`;
+  const sheet = document.adoptedStyleSheets.find((candidate) => candidate.sampleFills) ?? Object.assign(new CSSStyleSheet(), { sampleFills: true });
+  if (!document.adoptedStyleSheets.includes(sheet)) document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  if (![...sheet.cssRules].some((rule) => rule.selectorText === `.${name}`)) sheet.insertRule(`.${name} { width: ${share * 100}%; }`, sheet.cssRules.length);
+  return name;
+}
 
 const frames = '.search__field, .input-row, .segmented label, .country__toggle, .disclosure > summary';
 
@@ -74,7 +95,7 @@ function checkNoOverflow(container) {
 // The disabled frame is dashed and takes the page color, so it differs from a normal field.
 function checkDisabledFrame(container, selector) {
   const frame = container.querySelector(selector);
-  if (!container.querySelector(':disabled')) return [];
+  if (!container.querySelector(':disabled')) return ['the sample is not disabled'];
   const style = getComputedStyle(frame);
   const page = getComputedStyle(document.body).backgroundColor;
   const problems = [];
@@ -125,7 +146,7 @@ function fieldScenarios() {
       applyVariant(input, variant);
       container.append(field);
     },
-    check: (container) => [...checkFocusRing(container), ...checkDisabledFrame(container, '.input-row')],
+    check: (container) => [...checkFocusRing(container), ...(variant === 'disabled' ? checkDisabledFrame(container, '.input-row') : [])],
   }));
 }
 
@@ -143,8 +164,93 @@ function searchScenarios() {
       applyVariant(input, variant);
       container.append(form);
     },
-    check: (container) => [...checkFocusRing(container), ...checkDisabledFrame(container, '.search__field')],
+    check: (container) => [...checkFocusRing(container), ...(variant === 'disabled' ? checkDisabledFrame(container, '.search__field') : [])],
   }));
+}
+
+// A search field with its own anchor, so the suggestion list below it stays in its row.
+function searchBox({ value = '', disabled = false } = {}) {
+  const form = el('div', 'search sample-anchor');
+  const frame = el('div', `search__field${disabled ? ' search__field--disabled' : ''}`);
+  const input = el('input', 'search__input', '', {
+    type: 'search', 'aria-label': 'Search for a title', placeholder: 'Search a movie or series',
+  });
+  input.value = value;
+  input.disabled = disabled;
+  frame.append(icon('search'), input);
+  if (value && !disabled) {
+    const clear = el('button', 'icon-btn', '', { type: 'button', 'aria-label': 'Clear the search' });
+    clear.append(icon('close'));
+    frame.append(clear);
+  }
+  form.append(frame);
+  return form;
+}
+
+function searchStateScenarios() {
+  const note = (title, text) => {
+    const list = el('div', 'listbox', '', { role: 'status' });
+    const box = el('p', 'listbox__note');
+    box.append(el('strong', '', title), document.createTextNode(` ${text}`));
+    list.append(box);
+    return list;
+  };
+  return [
+    {
+      name: 'Search · empty',
+      render(container) {
+        container.append(searchBox(), el('p', 'search-hint', 'Type at least 2 letters to search.'));
+      },
+      check: (container) => container.querySelector('.search__input').value === '' ? checkNoOverflow(container) : ['the empty search holds text'],
+    },
+    {
+      name: 'Search · with text and clear button',
+      render(container) {
+        container.append(searchBox({ value: 'dune' }));
+      },
+      check(container) {
+        return container.querySelector('button[aria-label="Clear the search"]') ? checkNoOverflow(container) : ['the populated search has no clear button'];
+      },
+    },
+    {
+      name: 'Search · loading',
+      render(container) {
+        const wrap = searchBox({ value: 'dune' });
+        const list = el('div', 'listbox', '', { role: 'status', 'aria-label': 'Searching' });
+        const stack = el('div', 'skeleton-stack');
+        stack.append(el('span', 'skeleton skeleton--row'), el('span', 'skeleton skeleton--row'));
+        list.append(stack);
+        wrap.append(list);
+        container.append(wrap);
+      },
+      check: (container) => container.querySelectorAll('.skeleton').length >= 2 ? checkNoOverflow(container) : ['the search loading sample has no placeholders'],
+    },
+    {
+      name: 'Search · no results',
+      render(container) {
+        const wrap = searchBox({ value: 'zzzz' });
+        wrap.append(note('No title found for "zzzz".', 'Check the spelling or try another title.'));
+        container.append(wrap);
+      },
+      check: (container) => /no title found/i.test(container.textContent) ? checkNoOverflow(container) : ['the no-results message is missing'],
+    },
+    {
+      name: 'Search · offline',
+      render(container) {
+        const banner = el('div', 'banner banner--caution', '', { role: 'status' });
+        const body = el('div');
+        body.append(el('strong', 'banner__title', 'You are offline'), el('span', '', 'Search is paused. Titles you opened before still work.'));
+        banner.append(icon('offline'), body);
+        container.append(searchBox({ disabled: true }), banner);
+      },
+      check(container) {
+        const problems = checkDisabledFrame(container, '.search__field');
+        const text = container.querySelector('.banner').textContent;
+        if (!/offline/i.test(text) || !/paused|still work/i.test(text)) problems.push('the offline banner gives no reason');
+        return [...problems, ...checkNoOverflow(container)];
+      },
+    },
+  ];
 }
 
 function pillScenarios() {
@@ -217,7 +323,9 @@ function listScenarios() {
         if (variant === 'hover' && index === 0) option.classList.add('is-hover');
         list.append(option);
       });
-      container.append(list);
+      const anchor = el('div', 'sample-anchor');
+      anchor.append(list);
+      container.append(anchor);
     },
     check(container) {
       const problems = checkHover(container);
@@ -269,6 +377,18 @@ function panelScenarios() {
   ];
 }
 
+let pickerCount = 0;
+function renderServicePicker(container) {
+  const id = `service-pick-${pickerCount += 1}`;
+  const pick = el('div', 'service-pick');
+  const wrap = el('div', 'select-wrap');
+  const select = el('select', 'select', '', { id, 'aria-label': 'Streaming service' });
+  for (const name of ['Netflix', 'Disney+']) select.append(el('option', '', name));
+  wrap.append(select, icon('chevron'));
+  pick.append(el('label', '', 'Service', { for: id }), wrap);
+  container.append(pick);
+}
+
 function stateScenarios() {
   const verdictCard = (kind, iconName, headline, detail, body) => {
     const verdict = el('div', `verdict verdict--${kind}`);
@@ -281,16 +401,28 @@ function stateScenarios() {
   return [
     {
       name: 'Panel · verdict · no result',
-      render: (container) => container.append(verdictCard('unknown', 'alert', 'Not found on Netflix here', 'No source lists this title in your country')),
-      check: checkNoOverflow,
+      render: (container) => container.append(verdictCard('absent', 'ban', 'Not found on Netflix here', 'No source lists this title in your country')),
+      check(container) {
+        const icon = container.querySelector('.verdict__icon');
+        const problems = checkNoOverflow(container);
+        if (icon.querySelector('path').getAttribute('d') !== icons.ban) problems.push('the no-result verdict does not use the barred circle');
+        if (getComputedStyle(icon).color !== resolveToken('--color-text-muted', 'color')) problems.push('the no-result verdict icon is not gray');
+        return problems;
+      },
     },
     {
       name: 'Panel · verdict · error',
-      render: (container) => container.append(verdictCard('error', 'alert', 'The lookup failed', 'Try again in a moment')),
+      render(container) {
+        const verdict = verdictCard('error', 'alert', 'The lookup failed', 'Try again in a moment');
+        verdict.setAttribute('role', 'alert');
+        container.append(verdict);
+      },
       check(container) {
+        const problems = checkNoOverflow(container);
         const colour = getComputedStyle(container.querySelector('.verdict__icon')).color;
-        const muted = getComputedStyle(container).getPropertyValue('--color-text-muted');
-        return colour && colour !== muted ? checkNoOverflow(container) : ['the error verdict icon has no danger color'];
+        if (colour !== resolveToken('--color-danger', 'color')) problems.push('the error verdict icon has no danger color');
+        if (!container.querySelector('.verdict--error[role="alert"]')) problems.push('the error verdict is not announced as an alert');
+        return problems;
       },
     },
     {
@@ -311,17 +443,17 @@ function stateScenarios() {
       },
     },
     {
-      name: 'Service picker',
-      render(container) {
-        const pick = el('div', 'service-pick');
-        const wrap = el('div', 'select-wrap');
-        const select = el('select', 'select', '', { id: 'service-pick', 'aria-label': 'Streaming service' });
-        for (const name of ['Netflix', 'Disney+']) select.append(el('option', '', name));
-        wrap.append(select, icon('chevron'));
-        pick.append(el('label', '', 'Service', { for: 'service-pick' }), wrap);
-        container.append(pick);
-      },
+      name: 'Service picker · normal',
+      render: renderServicePicker,
       check: checkNoOverflow,
+    },
+    {
+      name: 'Service picker · focus',
+      render(container) {
+        renderServicePicker(container);
+        applyVariant(container.querySelector('select'), 'focus');
+      },
+      check: (container) => [...checkFocusRing(container), ...checkNoOverflow(container)],
     },
     ...['closed', 'open'].map((state) => ({
       name: `Country disclosure · ${state}`,
@@ -339,18 +471,18 @@ function stateScenarios() {
       },
       check: checkNoOverflow,
     })),
-    {
-      name: 'Country row · hover',
+    ...['normal', 'hover', 'focus'].map((variant) => ({
+      name: `Country row · ${variant}`,
       render(container) {
         const row = el('div', 'country');
-        const toggle = el('button', 'country__toggle is-hover', '', { type: 'button', 'aria-expanded': 'false' });
+        const toggle = applyVariant(el('button', 'country__toggle', '', { type: 'button', 'aria-expanded': 'false' }), variant);
         const name = el('span', 'country__name', 'France');
         toggle.append(name, el('span', 'badge badge--disagree', 'Sources disagree'), icon('chevron'));
         row.append(toggle);
         container.append(row);
       },
-      check: (container) => [...checkHover(container), ...checkNoOverflow(container)],
-    },
+      check: (container) => [...checkFocusRing(container), ...checkHover(container), ...checkNoOverflow(container)],
+    })),
     {
       name: 'Theme radios',
       render(container) {
@@ -380,7 +512,7 @@ function stateScenarios() {
         const meter = el('div', `meter${kind ? ` meter--${kind}` : ''}`);
         const bar = el('div', 'meter__bar', '', { role: 'meter', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(share * 100), 'aria-label': name });
         const fill = el('div', 'meter__fill');
-        fill.style.width = `${share * 100}%`;
+        fill.classList.add(fillClass(share));
         bar.append(fill);
         meter.append(el('span', '', `${Math.round(share * 100)} of 100 lookups used this month`), bar);
         usage.append(meter);
@@ -419,7 +551,7 @@ function stateScenarios() {
       check(container) {
         const dialog = container.querySelector('.dialog');
         const problems = checkNoOverflow(container);
-        if (dialog.getBoundingClientRect().width > parseFloat(getComputedStyle(document.documentElement).fontSize) * 26 + 1) {
+        if (dialog.getBoundingClientRect().width > parseFloat(resolveToken('--dialog-max', 'width')) + 1) {
           problems.push('the dialog exceeds its width cap');
         }
         return problems;
@@ -433,6 +565,7 @@ export default [
   ...iconButtonScenarios(),
   ...fieldScenarios(),
   ...searchScenarios(),
+  ...searchStateScenarios(),
   ...pillScenarios(),
   ...bannerScenarios(),
   ...listScenarios(),

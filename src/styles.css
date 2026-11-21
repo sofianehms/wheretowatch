@@ -37,13 +37,14 @@ code { font-size: var(--text-sm); }
 .app {
   max-width: var(--content-max);
   margin: 0 auto;
-  padding: var(--space-6) var(--space-4);
+  padding: max(var(--space-6), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right))
+    max(var(--space-6), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
 }
 h1 { font-size: var(--text-xl); }
 .page {
   display: flex; flex-direction: column; min-height: 100vh;
   width: 100%; max-width: var(--layout-max); margin: 0 auto;
-  padding: 0 max(var(--space-4), env(safe-area-inset-right)) var(--space-4) max(var(--space-4), env(safe-area-inset-left));
+  padding: 0 max(var(--space-4), env(safe-area-inset-right)) max(var(--space-4), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
 }
 .page > main { flex: 1; display: flex; flex-direction: column; width: 100%; }
 .column { max-width: var(--content-max); margin: 0 auto; }
@@ -128,7 +129,9 @@ p .link, li .link--inline { display: inline; min-height: 0; } /* links inside a 
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
 
 /* ---------- Dialog ---------- */
-.scrim { position: fixed; inset: 0; z-index: var(--z-dialog); display: grid; place-items: end center; padding: var(--space-4); background: var(--color-scrim); }
+.scrim { position: fixed; inset: 0; z-index: var(--z-dialog); display: grid; place-items: end center; background: var(--color-scrim);
+  padding: max(var(--space-4), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right))
+    max(var(--space-4), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left)); }
 .dialog { width: 100%; max-width: var(--dialog-max); display: grid; gap: var(--space-4); padding: var(--space-6);
   background: var(--color-surface-raised); border-radius: var(--radius-lg); box-shadow: var(--shadow-md);
   animation: reveal var(--duration-base) var(--ease-out) both; }
