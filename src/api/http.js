@@ -62,7 +62,7 @@ async function run(url, signal, timeoutMs, operation) {
   const cancel = () => controller.abort('aborted');
   signal?.addEventListener('abort', cancel, { once: true });
   if (signal?.aborted) cancel();
-  const timer = setTimeout(() => controller.abort('timeout'), timeoutMs);
+  const timer = timeoutMs === null ? null : setTimeout(() => controller.abort('timeout'), timeoutMs);
   const active = controller.signal;
   let stop;
   try {
@@ -87,46 +87,45 @@ function failureType(status) {
 
 /**
  * Returns JSON or throws an HttpError whose type identifies the failure.
- * The timeout covers fetching, parsing, and any retry wait and is capped at 10 seconds.
+ * Each attempt has its own timeout for fetching and parsing, capped at 10 seconds.
+ * The retry wait is capped separately.
  * An injected sleep(ms, signal) waits in milliseconds and should stop on abort.
  */
 export async function request(url, {
   headers, signal, timeoutMs = MAX_WAIT_MS, retryOn429 = false,
   fetchImpl = globalThis.fetch, sleep = delay,
 } = {}) {
-  return run(url, signal, Math.min(timeoutMs, MAX_WAIT_MS), async (active) => {
-    async function attempt() {
-      try {
-        if (globalThis.navigator?.onLine === false) return { type: 'offline' };
-        const response = await fetchImpl(url, { headers, signal: active });
-        if (response.ok) return { data: await response.json() };
+  const attempt = () => run(url, signal, Math.min(timeoutMs, MAX_WAIT_MS), async (active) => {
+    try {
+      if (globalThis.navigator?.onLine === false) return { type: 'offline' };
+      const response = await fetchImpl(url, { headers, signal: active });
+      if (response.ok) return { data: await response.json() };
 
-        const { status } = response;
-        if (status === 429) {
-          const contentType = response.headers.get('Content-Type');
-          const body = await (contentType?.startsWith('text/plain')
-            ? response.text() : response.json()).catch(() => null);
-          if (isQuotaExhausted(status, response.headers, body)) return { type: 'quota', status };
-          return { type: 'rateLimited', status, wait: retryDelay(response.headers) };
-        }
-        return { type: failureType(status), status };
-      } catch {
-        return { type: globalThis.navigator?.onLine === false ? 'offline' : 'network' };
+      const { status } = response;
+      if (status === 429) {
+        const contentType = response.headers.get('Content-Type')?.split(';', 1)[0].trim().toLowerCase();
+        const body = await (contentType === 'text/plain'
+          ? response.text() : response.json()).catch(() => null);
+        if (isQuotaExhausted(status, response.headers, body)) return { type: 'quota', status };
+        return { type: 'rateLimited', status, wait: retryDelay(response.headers) };
       }
+      return { type: failureType(status), status };
+    } catch {
+      return { type: globalThis.navigator?.onLine === false ? 'offline' : 'network' };
     }
+  });
 
-    let result = await attempt();
-    if (active.aborted) throw new HttpError(active.reason, url);
-    if (retryOn429 && result.type === 'rateLimited') {
+  let result = await attempt();
+  if (retryOn429 && result.type === 'rateLimited') {
+    await run(url, signal, null, async (active) => {
       try {
         await sleep(result.wait, active);
       } catch {
         throw new HttpError('network', url);
       }
-      if (active.aborted) throw new HttpError(active.reason, url);
-      result = await attempt();
-    }
-    if (result.type) throw new HttpError(result.type, url, result.status);
-    return result.data;
-  });
+    });
+    result = await attempt();
+  }
+  if (result.type) throw new HttpError(result.type, url, result.status);
+  return result.data;
 }

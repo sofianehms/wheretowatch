@@ -195,8 +195,8 @@ test('honors a shorter configured timeout', async (t) => {
   await check;
 });
 
-for (const [retryAfter, expectedCalls] of [['2', 2], ['10', 1]]) {
-  test(`shares the 10-second deadline with Retry-After ${retryAfter}`, async (t) => {
+for (const retryAfter of ['10', '120']) {
+  test(`starts a fresh attempt after Retry-After ${retryAfter}`, async (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const signals = [];
     const pending = request(url, {
@@ -213,17 +213,19 @@ for (const [retryAfter, expectedCalls] of [['2', 2], ['10', 1]]) {
     const check = assert.rejects(pending, expectError('timeout'));
     t.mock.timers.tick(1000);
     await new Promise(setImmediate);
-    t.mock.timers.tick(8999);
+    t.mock.timers.tick(9999);
     await new Promise(setImmediate);
-    assert.equal(signals.length, expectedCalls);
-    assert.ok(signals.every((signal) => !signal.aborted));
+    assert.equal(signals.length, 1);
     t.mock.timers.tick(1);
     await new Promise(setImmediate);
-    assert.ok(signals.every((signal) => signal.aborted));
+    assert.equal(signals.length, 2);
+    assert.notEqual(signals[0], signals[1]);
+    t.mock.timers.tick(9999);
+    assert.equal(signals[1].aborted, false);
+    t.mock.timers.tick(1);
     await check;
-    t.mock.timers.tick(1000);
-    await new Promise(setImmediate);
-    assert.equal(signals.length, expectedCalls);
+    assert.equal(signals[0].aborted, false);
+    assert.equal(signals[1].aborted, true);
   });
 }
 
@@ -256,4 +258,35 @@ test('cancels during the retry wait', async (t) => {
   controller.abort(dummyKey);
   await assert.rejects(pending, expectError('aborted'));
   assert.equal(fetchImpl.mock.callCount(), 1);
+});
+
+test('recognizes an uppercase plain-text quota response without retrying', async (t) => {
+  const fetchImpl = t.mock.fn(async () => new Response(quotaFixtures[1][2], {
+    status: 429,
+    headers: { 'Content-Type': 'TEXT/PLAIN; charset=UTF-8' },
+  }));
+  await assert.rejects(request(url, { retryOn429: true, fetchImpl }), expectError('quota', 429));
+  assert.equal(fetchImpl.mock.callCount(), 1);
+});
+
+test('cancels the second attempt', async () => {
+  const controller = new AbortController();
+  let startRetry;
+  const retryStarted = new Promise((resolve) => { startRetry = resolve; });
+  let calls = 0;
+  const pending = request(url, {
+    signal: controller.signal,
+    retryOn429: true,
+    sleep: async () => {},
+    fetchImpl: async (_, { signal }) => {
+      if (++calls === 1) return response(429);
+      startRetry(signal);
+      return new Promise(() => {});
+    },
+  });
+  const retrySignal = await retryStarted;
+  controller.abort(dummyKey);
+  await assert.rejects(pending, expectError('aborted'));
+  assert.equal(retrySignal.aborted, true);
+  assert.equal(calls, 2);
 });
