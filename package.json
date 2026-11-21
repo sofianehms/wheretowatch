@@ -1,0 +1,21 @@
+{
+  "name": "wheretowatch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Find where to watch any movie or series, and in which countries it is available on Netflix and other streaming services.",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "lint": "node scripts/lint.mjs",
+    "verify": "node scripts/verify.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "chrome-launcher": "^1.2.3",
+    "lighthouse": "^12.8.2",
+    "playwright-core": "^1.65.1"
+  }
+}

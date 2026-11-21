@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Where to Watch</title>
+  <meta name="description" content="Find where to watch any movie or series, and in which countries it is available on Netflix and other streaming services.">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e1013" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="design/tokens.css">
+  <link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+  <main class="app">
+    <h1>Where to Watch</h1>
+    <form class="search" role="search">
+      <label for="q" class="visually-hidden">Search</label>
+      <input id="q" name="q" type="search" placeholder="Search" autocomplete="off" enterkeyhint="search">
+    </form>
+    <p id="status" class="muted" role="status" aria-live="polite">Type to search.</p>
+    <ul id="results" class="results"></ul>
+  </main>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

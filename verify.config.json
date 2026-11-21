@@ -1,0 +1,10 @@
+{
+  "root": ".",
+  "pages": ["/"],
+  "viewports": [
+    { "name": "mobile", "width": 390, "height": 844, "mobile": true },
+    { "name": "desktop", "width": 1280, "height": 800, "mobile": false }
+  ],
+  "schemes": ["light", "dark"],
+  "thresholds": { "accessibility": 95, "best-practices": 90, "seo": 90, "performance": 90 }
+}
