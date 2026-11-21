@@ -11,21 +11,33 @@ export const initialState = Object.freeze({
 });
 
 export function createStore(initial = initialState) {
-  let state = Object.freeze({ ...initial });
+  const snapshots = new WeakSet();
+  let state = freezeCopy({ ...initial }, snapshots);
   const listeners = new Set();
+  const pending = [];
 
   return {
     get() {
       return state;
     },
     set(patch) {
-      const next = { ...state, ...patch };
-      if (Reflect.ownKeys(next).every((key) => Object.is(next[key], state[key]))) return;
+      const previous = pending.at(-1) ?? state;
+      const next = { ...previous, ...patch };
+      if (Reflect.ownKeys(next).every((key) =>
+        Object.hasOwn(previous, key) && Object.is(next[key], previous[key]))) return;
 
-      // Nested values are shared. Replace them through set() when they change.
-      const snapshot = Object.freeze(next);
-      state = snapshot;
-      for (const listener of [...listeners]) listener(snapshot);
+      // Publish nested updates in order after the current notification finishes.
+      pending.push(freezeCopy(next, snapshots));
+      if (pending.length > 1) return;
+
+      try {
+        for (let index = 0; index < pending.length; index++) {
+          state = pending[index];
+          for (const listener of [...listeners]) listener(state);
+        }
+      } finally {
+        pending.length = 0;
+      }
     },
     subscribe(listener) {
       const subscription = (snapshot) => listener(snapshot);
@@ -35,4 +47,29 @@ export function createStore(initial = initialState) {
       };
     },
   };
+}
+
+// State data consists of primitives, arrays, and plain records.
+function freezeCopy(value, snapshots, copies = new WeakMap()) {
+  if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return value;
+  if (snapshots.has(value)) return value;
+  if (copies.has(value)) return copies.get(value);
+
+  const prototype = Object.getPrototypeOf(value);
+  const isArray = Array.isArray(value);
+  if (!isArray && (typeof value === 'function' || (prototype !== Object.prototype && prototype !== null))) {
+    throw new TypeError('State values must be primitives, arrays, or plain records.');
+  }
+
+  const copy = isArray ? new Array(value.length) : Object.create(prototype);
+  copies.set(value, copy);
+  for (const key of Reflect.ownKeys(value)) {
+    if (isArray && key === 'length') continue;
+    Object.defineProperty(copy, key, {
+      value: freezeCopy(value[key], snapshots, copies),
+      enumerable: Object.prototype.propertyIsEnumerable.call(value, key),
+    });
+  }
+  snapshots.add(copy);
+  return Object.freeze(copy);
 }

@@ -45,6 +45,43 @@ test('an unchanged patch preserves the snapshot without notifying', () => {
   assert.strictEqual(store.get(), snapshot);
 });
 
+test('an undefined value adds an own property and notifies only once', () => {
+  const store = createStore({});
+  const notifications = [];
+  store.subscribe((state) => notifications.push(state));
+
+  store.set({ extra: undefined });
+  store.set({ extra: undefined });
+
+  assert.deepEqual(notifications, [{ extra: undefined }]);
+  assert.ok(Object.hasOwn(store.get(), 'extra'));
+});
+
+test('updates from listeners are published in order after the current notification', () => {
+  const store = createStore();
+  const received = [];
+  const patch = { query: 'second', suggestions: [{ id: 1 }] };
+  store.subscribe(({ query }) => {
+    if (query !== 'first') return;
+    store.set(patch);
+    patch.suggestions[0].id = 2;
+    store.set({ searchStatus: 'results' });
+  });
+  store.subscribe((snapshot) => {
+    assert.strictEqual(snapshot, store.get());
+    received.push([snapshot.query, snapshot.searchStatus]);
+  });
+
+  store.set({ query: 'first' });
+
+  assert.deepEqual(received, [
+    ['first', 'idle'],
+    ['second', 'idle'],
+    ['second', 'results'],
+  ]);
+  assert.deepEqual(store.get().suggestions, [{ id: 1 }]);
+});
+
 test('unsubscribing removes only the corresponding subscription', () => {
   const store = createStore();
   const queries = [];
@@ -61,7 +98,7 @@ test('unsubscribing removes only the corresponding subscription', () => {
 });
 
 test('get returns a frozen snapshot detached from the initial object', () => {
-  const initial = { query: '' };
+  const initial = { query: '', selected: { id: 1 } };
   const store = createStore(initial);
   const snapshot = store.get();
 
@@ -69,5 +106,29 @@ test('get returns a frozen snapshot detached from the initial object', () => {
     snapshot.query = 'Arrival';
   }, TypeError);
   initial.query = 'Alien';
+  initial.selected.id = 2;
   assert.equal(store.get().query, '');
+  assert.deepEqual(store.get().selected, { id: 1 });
+  assert.ok(Object.isFrozen(snapshot.selected));
+});
+
+test('nested state is frozen and detached from the patch', () => {
+  const store = createStore();
+  const patch = { suggestions: [{ id: 1 }] };
+  const notifications = [];
+  store.subscribe((snapshot) => notifications.push(snapshot));
+  store.set(patch);
+  const snapshot = store.get();
+
+  assert.throws(() => snapshot.suggestions.push({ id: 2 }), TypeError);
+  assert.throws(() => {
+    snapshot.suggestions[0].id = 2;
+  }, TypeError);
+  patch.suggestions[0].id = 3;
+  patch.suggestions.push({ id: 4 });
+
+  assert.deepEqual(snapshot.suggestions, [{ id: 1 }]);
+  assert.strictEqual(store.get(), snapshot);
+  assert.equal(notifications.length, 1);
+  assert.strictEqual(notifications[0], snapshot);
 });
