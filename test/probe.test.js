@@ -2,11 +2,14 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { compareQuota, extractShape, maskKeys, quotaHeaders, saServices, tmdbServices } from '../scripts/probe/analysis.js';
+import {
+  compareQuota, extractShape, languagePresence, languageRates, maskKeys, quotaHeaders, saServices, tmdbServices,
+} from '../scripts/probe/analysis.js';
 import { resolveOutputPath } from '../scripts/probe/output.js';
 import { renderReport } from '../scripts/probe/report.js';
 import countries from './fixtures/sa/countries.js';
 import show from './fixtures/sa/movie.js';
+import series from './fixtures/sa/series.js';
 import configuration from './fixtures/tmdb/images-configuration.js';
 import movie from './fixtures/tmdb/movie-services.js';
 import regions from './fixtures/tmdb/regions.js';
@@ -42,7 +45,23 @@ test('compares matching quota counters and treats conflicting evidence as inconc
   assert.deepEqual(compareQuota(headers('90'), {}, headers('unknown')), []);
 });
 
-test('renders fixture findings without raw values or a fictitious key in headers and identifiers', () => {
+test('counts each Netflix country once and distinguishes audio, subtitles and closed captions', () => {
+  const fixture = structuredClone(show);
+  const [originalOffer] = fixture.streamingOptions.us;
+  const [emptyOffer] = fixture.streamingOptions.fr;
+  fixture.streamingOptions.fr.push({
+    ...emptyOffer, subtitles: [{ locale: { language: 'fra' }, closedCaptions: false }],
+  });
+  fixture.streamingOptions.fr.push({ ...originalOffer, service: { id: 'lantern' } });
+  fixture.streamingOptions.gb = [{ ...originalOffer, service: { id: 'lantern' } }];
+
+  assert.deepEqual(languageRates(languagePresence(fixture)), {
+    total: 2, audio: 1, subtitles: 2, closedCaptions: 1,
+  });
+  assert.deepEqual(languagePresence({}), []);
+});
+
+test('renders fixture findings without raw values or a fictitious key in headers and identifiers', (context) => {
   const key = 'fixture.key+[123]';
   const observed = (label, body, headers = {}) => ({ label, status: 200, body, headers });
   const report = renderReport({
@@ -61,10 +80,16 @@ test('renders fixture findings without raw values or a fictitious key in headers
       before: observed('Show before', show, { 'x-quota-detail': key }),
       countries: observed('Countries', {
         ...countries,
-        zz: { services: [{ id: key, name: key }] },
+        us: { services: [...countries.us.services, { id: key, name: key }] },
       }),
-      after: observed('Show after', show),
+      after: observed('Show after', show, { 'x-quota-remaining': '89' }),
     },
+    region: 'FR',
+    v05: {
+      region: 'FR', sampleSize: 20, selected: 20,
+      titles: [show, series].map((body, index) => ({ ...observed('Show', body), id: index + 1 })),
+    },
+    v18: observed('GET /v4/shows/search/title', [show, series], { 'x-quota-remaining': '88' }),
   });
 
   for (const heading of ['V-01 — TMDB', 'V-02 — Streaming Availability', 'Service identifiers']) {
@@ -80,16 +105,47 @@ test('renders fixture findings without raw values or a fictitious key in headers
   assert.ok(!report.includes(show.title));
   assert.ok(!report.includes(show.streamingOptions.us[0].link));
   assert.equal(maskKeys('abc.* abc', ['abc', 'abc.*']), '[redacted] [redacted]');
+  const rates = [
+    '| Overall | 1/3 (33.3%) | 1/3 (33.3%) | 1/3 (33.3%) |',
+    '| FR | 0/2 (0.0%) | 0/2 (0.0%) | 0/2 (0.0%) |',
+    '| US | 1/1 (100.0%) | 1/1 (100.0%) | 1/1 (100.0%) |',
+    '| 1 (HTTP 200) | 1/2 (50.0%) | 1/2 (50.0%) | 1/2 (50.0%) |',
+    '| 1 / FR | 0/1 (0.0%) | 0/1 (0.0%) | 0/1 (0.0%) |',
+  ];
+  for (const row of rates) assert.ok(report.includes(row), row);
+  context.diagnostic('V-05 fixture rates (audio, subtitles, closed captions)');
+  for (const row of rates) context.diagnostic(row);
+  assert.match(report, /Countries present: fr, us/);
+  assert.match(report, /Results with offers in every country returned by \/countries: 1\/2/);
+  assert.match(report, /x-quota-remaining: 1\n/);
 });
 
 const repo = fileURLToPath(new URL('../', import.meta.url));
 const fetchGuard = 'data:text/javascript,' + encodeURIComponent('globalThis.fetch = () => process.exit(99);');
 
-function invokeProbe(args, env = {}) {
-  return spawnSync(process.execPath, ['--import', fetchGuard, 'scripts/probe-apis.mjs', ...args], {
+function invokeProbe(args, env = {}, fetchMock = fetchGuard) {
+  return spawnSync(process.execPath, ['--import', fetchMock, 'scripts/probe-apis.mjs', ...args], {
     cwd: repo, env, encoding: 'utf8',
   });
 }
+
+test('refuses V-05 and V-18 before any SA fetch without confirmation', () => {
+  const fetchMock = 'data:text/javascript,' + encodeURIComponent(`
+    let saCalls = 0;
+    globalThis.fetch = async (url) => {
+      if (new URL(url).hostname === 'api.movieofthenight.com') saCalls++;
+      return new Response('{}');
+    };
+    process.on('exit', () => console.log('SA calls: ' + saCalls));
+  `);
+  for (const [flag, measurement, count] of [['--v05', 'V-05', 20], ['--v18', 'V-18', 1]]) {
+    const result = invokeProbe([flag], { TMDB_TOKEN: 'dummy-tmdb', SA_KEY: 'dummy-sa' }, fetchMock);
+    assert.equal(result.status, 1);
+    assert.ok(result.stdout.includes(measurement + ': ' + count + ' additional'));
+    assert.match(result.stdout, /^SA calls: 0$/m);
+    assert.match(result.stderr, /--confirm-sa-calls/);
+  }
+});
 
 test('prints help and exits before network access if either key is missing', () => {
   for (const env of [{}, { TMDB_TOKEN: 'dummy-tmdb' }, { SA_KEY: 'dummy-sa' }]) {

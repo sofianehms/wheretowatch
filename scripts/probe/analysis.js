@@ -68,6 +68,58 @@ function remainingCount(headers, name) {
   return /^\d+$/.test(raw ?? '') && Number.isSafeInteger(Number(raw)) ? Number(raw) : undefined;
 }
 
+export function quotaDeltas(before, after) {
+  return Object.keys(before).filter((name) => /remaining/i.test(name)).flatMap((name) => {
+    const start = remainingCount(before, name);
+    const end = remainingCount(after, name);
+    return start !== undefined && end !== undefined && end <= start ? [{ name, cost: start - end }] : [];
+  });
+}
+
+function countryOptions(show) {
+  const options = show?.streamingOptions;
+  return Object.entries(options ?? {}).filter(([country, offers]) =>
+    /^[a-z]{2}$/.test(country) && Array.isArray(offers));
+}
+
+export function offerCoverage(results) {
+  return results.map((show) => {
+    const countries = countryOptions(show);
+    return {
+      countries: countries.map(([code]) => code).sort(),
+      offers: countries.filter(([, options]) => options.length).map(([code]) => code).sort(),
+    };
+  });
+}
+
+function hasLanguage(language) {
+  return typeof language === 'string' && language.trim().length > 0;
+}
+
+export function languagePresence(show) {
+  return countryOptions(show).flatMap(([country, options]) => {
+    const netflix = options.filter((option) => option?.service?.id === 'netflix');
+    if (netflix.length === 0) return [];
+    const tracks = (field) => netflix.flatMap((option) => Array.isArray(option[field]) ? option[field] : []);
+    const subtitles = tracks('subtitles').filter((track) => hasLanguage(track?.locale?.language));
+    return [{
+      country,
+      audio: tracks('audios').some((track) => hasLanguage(track?.language)),
+      subtitles: subtitles.length > 0,
+      closedCaptions: subtitles.some((track) => track.closedCaptions === true),
+    }];
+  });
+}
+
+export function languageRates(observations) {
+  return {
+    total: observations.length,
+    audio: observations.filter((entry) => entry.audio).length,
+    subtitles: observations.filter((entry) => entry.subtitles).length,
+    closedCaptions: observations.filter((entry) => entry.closedCaptions).length,
+  };
+}
+
 export function compareQuota(before, countries, after) {
   return Object.keys(before).filter((name) => /remaining/i.test(name)).flatMap((name) => {
     const start = remainingCount(before, name);
