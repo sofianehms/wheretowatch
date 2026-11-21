@@ -30,6 +30,8 @@ const failures = [];
 const fail = (msg) => { failures.push(msg); console.log(`  FAIL ${msg}`); };
 const ok = (msg) => console.log(`  ok   ${msg}`);
 
+const statesPath = '/test/states.html';
+const isStatesPage = (route) => route.split('?')[0] === statesPath;
 const server = await startServer(cfg.root);
 const origin = `http://127.0.0.1:${server.address().port}`;
 const allowedOrigins = new Set([
@@ -77,6 +79,78 @@ async function checkTheme(page, theme, scheme, report) {
   }
 }
 
+async function checkOverflow(page, width, report) {
+  // Mobile emulation can widen innerWidth to fit overflowing content.
+  const overflow = await page.evaluate((w) => document.documentElement.scrollWidth - w, width);
+  if (overflow > 0) report(`horizontal scroll (${overflow}px)`);
+}
+
+async function checkStates(page, report) {
+  const problems = await page.evaluate(() => window.statesReady);
+  if (!problems) report('states page did not initialize');
+  else problems.forEach(report);
+}
+
+async function checkSubpath() {
+  const prefix = '/wheretowatch';
+  const mountedServer = await startServer(cfg.root, 0, { prefix });
+  const mountedOrigin = `http://127.0.0.1:${mountedServer.address().port}`;
+  const label = `${prefix}/ subpath`;
+  const problems = new Set();
+  try {
+    const ctx = await browser.newContext();
+    try {
+      ctx.on('response', (response) => {
+        if (response.status() >= 400) problems.add(`HTTP ${response.status()}: ${response.url()}`);
+      });
+      ctx.on('requestfailed', (request) => problems.add(`request failed: ${request.url()}`));
+      const page = await ctx.newPage();
+      page.on('pageerror', (error) => problems.add(`page error: ${error.message}`));
+      await page.goto(mountedOrigin + prefix + '/', { waitUntil: 'networkidle' });
+      await page.waitForFunction(async () => {
+        const registration = await navigator.serviceWorker.getRegistration();
+        return registration?.active?.state === 'activated';
+      }, null, { timeout: 5000 });
+    } catch (error) {
+      problems.add(error.message);
+    } finally {
+      await ctx.close();
+    }
+  } finally {
+    mountedServer.close();
+  }
+  if (problems.size) problems.forEach((problem) => fail(`${label}: ${problem}`));
+  else ok(`${label} (no failed requests, service worker activated)`);
+}
+
+async function checkTextZoom(route) {
+  const width = 390;
+  const label = `${route} 200% text zoom at ${width}px`;
+  const ctx = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
+  const problems = new Set();
+  const report = (problem) => problems.add(problem);
+  try {
+    await ctx.addInitScript(() => {
+      function enlargeText() {
+        if (!document.documentElement) return;
+        document.documentElement.style.fontSize = '200%';
+        observer.disconnect();
+      }
+      const observer = new MutationObserver(enlargeText);
+      observer.observe(document, { childList: true });
+      enlargeText();
+    });
+    const page = await ctx.newPage();
+    await page.goto(origin + route, { waitUntil: 'networkidle' });
+    if (isStatesPage(route)) await checkStates(page, report);
+    await checkOverflow(page, width, report);
+  } finally {
+    await ctx.close();
+  }
+  if (problems.size) problems.forEach((problem) => fail(`${label}: ${problem}`));
+  else ok(`${label} (no horizontal scroll)`);
+}
+
 try {
   console.log(`verify: ${pages.length} page(s) x ${cfg.viewports.length} viewport(s) x ${cfg.schemes.length} theme(s)`);
   for (const { path: route } of pages) {
@@ -119,12 +193,11 @@ try {
         page.on('requestfailed', (r) => { if (new URL(r.url()).origin === origin) report(`request failed: ${r.url()}`); });
         const resp = await page.goto(origin + route, { waitUntil: 'networkidle' });
         if (!resp || resp.status() >= 400) report(`HTTP ${resp ? resp.status() : 'none'}`);
+        if (isStatesPage(route)) await checkStates(page, report);
         await checkTheme(page, scheme, scheme, report);
         const name = `${route.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'index'}-${vp.name}-${scheme}.png`;
         await page.screenshot({ path: path.join(shotsDir, name), fullPage: true });
-        // compare with the configured width: mobile emulation widens innerWidth to fit overflowing content
-        const overflow = await page.evaluate((w) => document.documentElement.scrollWidth - w, vp.width);
-        if (overflow > 0) report(`horizontal scroll (${overflow}px)`);
+        await checkOverflow(page, vp.width, report);
         const axe = await new AxeBuilder({ page }).analyze();
         for (const v of axe.violations.filter((x) => ['serious', 'critical'].includes(x.impact))) {
           report(`axe ${v.impact}: ${v.id} (${v.nodes.length} node(s))`);
@@ -134,6 +207,10 @@ try {
       }
     }
   }
+
+  await checkSubpath();
+  await checkTextZoom('/');
+  await checkTextZoom(pages.find((page) => isStatesPage(page.path)).path);
 
   const chrome = await chromeLauncher.launch({ chromePath, chromeFlags: ['--headless=new', '--disable-gpu', ...sandboxArgs] });
   try {
