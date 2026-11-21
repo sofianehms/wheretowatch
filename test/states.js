@@ -1,4 +1,6 @@
-const targets = 'button, a[href], input, select, [role="option"], [tabindex]';
+import { installStateRules } from './states-sim.js';
+
+const targets = 'button, a[href], input, select, summary, label:has(input[type="radio"]), [role="option"], [tabindex]';
 const minimumTargetSize = 44;
 
 function checkTargets(container) {
@@ -18,6 +20,7 @@ async function renderView() {
   const view = new URLSearchParams(location.search).get('view');
   if (!view || !/^[a-z][a-z0-9-]*$/.test(view)) return ['Choose a valid states view.'];
 
+  installStateRules();
   const { default: scenarios, check } = await import(`./states/${view}.js`);
   const list = document.querySelector('#scenarios');
   const problems = [];

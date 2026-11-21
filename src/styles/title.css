@@ -8,12 +8,12 @@
   padding: var(--space-4) 0;
 }
 .title-head > .poster { flex: none; }
-.title-head__info { flex: 1 1 12rem; min-width: 0; display: grid; gap: var(--space-1); }
+.title-head__info { flex: 1 1 var(--title-basis); min-width: 0; display: grid; gap: var(--space-1); }
 .title-head::before { /* hero fade: the streaming-app backdrop evoked with the poster tones only */
   content: ""; position: absolute; z-index: -1; inset: 0 calc(-1 * var(--space-4));
   background:
-    linear-gradient(to bottom, var(--color-hero-fade), var(--color-bg) 85%),
-    linear-gradient(120deg, var(--p-from), var(--p-to));
+    linear-gradient(to bottom, var(--color-hero-fade), var(--color-bg) var(--hero-fade-stop)),
+    linear-gradient(var(--hero-angle), var(--p-from), var(--p-to));
   opacity: var(--hero-opacity);
 }
 .title-head__name { font-size: var(--text-xl); line-height: var(--leading-tight); font-weight: var(--weight-bold);

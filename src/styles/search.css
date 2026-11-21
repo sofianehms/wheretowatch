@@ -34,7 +34,7 @@
 /* Active option: the 4px marker carries the state (>= 3:1 on the active row in both themes). */
 .option[aria-selected="true"] { background: var(--color-surface-hover); box-shadow: inset var(--space-1) 0 0 var(--color-indicator); }
 .option__title { display: block; font-weight: var(--weight-bold); color: var(--color-text-strong); overflow-wrap: anywhere; }
-.option__title mark { background: none; color: inherit; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 0.2em; }
+.option__title mark { background: none; color: inherit; text-decoration: underline; text-decoration-thickness: var(--underline-thickness); text-underline-offset: var(--underline-offset); }
 .option__meta { display: block; font-size: var(--text-sm); color: var(--color-text-muted); }
 .option__lines { display: grid; gap: var(--space-2); }
 .listbox__note { padding: var(--space-3) var(--space-4); font-size: var(--text-sm); color: var(--color-text-muted); }

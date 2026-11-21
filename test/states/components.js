@@ -1,4 +1,7 @@
 // One scenario per base component and per variant: normal, simulated hover, focus, disabled.
+// Hover and focus come from the production rules (see ../states-sim.js), so they are measured, not drawn.
+import { hoverChanges } from '../states-sim.js';
+
 const SVG = 'http://www.w3.org/2000/svg';
 const icons = {
   check: 'M20 6 9 17l-5-5',
@@ -29,33 +32,55 @@ function el(tag, className, text, attributes = {}) {
 
 const variants = ['normal', 'hover', 'focus', 'disabled'];
 
+const frames = '.search__field, .input-row, .segmented label, .country__toggle, .disclosure > summary';
+
 // Apply one interaction variant to a control and return it.
 function applyVariant(control, variant) {
   if (variant === 'hover') control.classList.add('is-hover');
   if (variant === 'disabled') control.disabled = true;
-  if (variant === 'focus') control.dataset.expectFocus = 'true';
+  if (variant === 'focus') {
+    control.classList.add('is-focus');
+    control.closest('.search__field, .input-row')?.classList.add('is-focus');
+    control.dataset.expectFocus = 'true';
+  }
   return control;
 }
 
-// Focus happens after layout so the ring is the one a keyboard user sees.
-function focusExpected(container) {
-  const control = container.querySelector('[data-expect-focus]');
-  control?.focus({ focusVisible: true });
-  return control;
-}
-
+// Every focused sample keeps its own ring, so all of them are visible together in a capture.
 function checkFocusRing(container) {
-  const control = focusExpected(container);
-  if (!control) return [];
-  const style = getComputedStyle(control);
-  const visible = style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) >= 2;
-  const field = control.closest('.search__field, .input-row');
-  const fieldStyle = field && getComputedStyle(field);
-  return visible || (fieldStyle && fieldStyle.outlineStyle !== 'none') ? [] : ['the focus ring is not visible'];
+  const problems = [];
+  for (const control of container.querySelectorAll('[data-expect-focus]')) {
+    const ringed = [control, control.closest(frames), control.parentElement].filter(Boolean).some((node) => {
+      const style = getComputedStyle(node);
+      return style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) >= 2;
+    });
+    if (!ringed) problems.push('the focus ring is not visible');
+  }
+  return problems;
+}
+
+function checkHover(container) {
+  const problems = [];
+  for (const control of container.querySelectorAll('.is-hover')) {
+    if (!hoverChanges(control)) problems.push('the hover state changes nothing: no hover rule applies');
+  }
+  return problems;
 }
 
 function checkNoOverflow(container) {
   return container.scrollWidth > container.clientWidth ? ['the component overflows its container'] : [];
+}
+
+// The disabled frame is dashed and takes the page color, so it differs from a normal field.
+function checkDisabledFrame(container, selector) {
+  const frame = container.querySelector(selector);
+  if (!container.querySelector(':disabled')) return [];
+  const style = getComputedStyle(frame);
+  const page = getComputedStyle(document.body).backgroundColor;
+  const problems = [];
+  if (style.borderTopStyle !== 'dashed') problems.push('the disabled frame is not dashed');
+  if (style.backgroundColor !== page) problems.push('the disabled frame does not use the page color');
+  return problems;
 }
 
 function buttonScenarios() {
@@ -70,7 +95,7 @@ function buttonScenarios() {
     render(container) {
       container.append(applyVariant(el('button', `btn btn--${kind}`, label, { type: 'button' }), variant));
     },
-    check: (container) => [...checkFocusRing(container), ...checkNoOverflow(container)],
+    check: (container) => [...checkFocusRing(container), ...checkHover(container), ...checkNoOverflow(container)],
   })));
 }
 
@@ -82,7 +107,7 @@ function iconButtonScenarios() {
       button.append(icon('close', 'lg'));
       container.append(applyVariant(button, variant));
     },
-    check: checkFocusRing,
+    check: (container) => [...checkFocusRing(container), ...checkHover(container)],
   }));
 }
 
@@ -100,7 +125,7 @@ function fieldScenarios() {
       applyVariant(input, variant);
       container.append(field);
     },
-    check: checkFocusRing,
+    check: (container) => [...checkFocusRing(container), ...checkDisabledFrame(container, '.input-row')],
   }));
 }
 
@@ -118,7 +143,7 @@ function searchScenarios() {
       applyVariant(input, variant);
       container.append(form);
     },
-    check: checkFocusRing,
+    check: (container) => [...checkFocusRing(container), ...checkDisabledFrame(container, '.search__field')],
   }));
 }
 
@@ -195,9 +220,10 @@ function listScenarios() {
       container.append(list);
     },
     check(container) {
+      const problems = checkHover(container);
       const active = container.querySelector('[aria-selected="true"]');
-      if (!active) return [];
-      return getComputedStyle(active).boxShadow === 'none' ? ['the active option has no marker'] : [];
+      if (active && getComputedStyle(active).boxShadow === 'none') problems.push('the active option has no marker');
+      return problems;
     },
   }));
 }
@@ -231,6 +257,173 @@ function panelScenarios() {
         stack.append(el('span', 'skeleton skeleton--line skeleton--short'), el('span', 'skeleton skeleton--row'));
         container.append(stack);
       },
+      check(container) {
+        const lines = container.querySelectorAll('.skeleton');
+        if (lines.length < 2) return ['the loading sample does not render its placeholders'];
+        const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const animated = getComputedStyle(lines[0]).animationName !== 'none';
+        if (reduced && animated) return ['the skeleton still pulses under reduced motion'];
+        return reduced || animated ? [] : ['the skeleton does not pulse'];
+      },
+    },
+  ];
+}
+
+function stateScenarios() {
+  const verdictCard = (kind, iconName, headline, detail, body) => {
+    const verdict = el('div', `verdict verdict--${kind}`);
+    const mark = icon(iconName, 'lg');
+    mark.classList.add('verdict__icon');
+    verdict.append(mark, el('p', 'verdict__headline', headline), el('p', 'verdict__detail', detail));
+    if (body) verdict.append(el('div', 'verdict__body', body));
+    return verdict;
+  };
+  return [
+    {
+      name: 'Panel · verdict · no result',
+      render: (container) => container.append(verdictCard('unknown', 'alert', 'Not found on Netflix here', 'No source lists this title in your country')),
+      check: checkNoOverflow,
+    },
+    {
+      name: 'Panel · verdict · error',
+      render: (container) => container.append(verdictCard('error', 'alert', 'The lookup failed', 'Try again in a moment')),
+      check(container) {
+        const colour = getComputedStyle(container.querySelector('.verdict__icon')).color;
+        const muted = getComputedStyle(container).getPropertyValue('--color-text-muted');
+        return colour && colour !== muted ? checkNoOverflow(container) : ['the error verdict icon has no danger color'];
+      },
+    },
+    {
+      name: 'Banner · offline with reason',
+      render(container) {
+        const banner = el('div', 'banner banner--caution', '', { role: 'status' });
+        const body = el('div');
+        body.append(el('strong', 'banner__title', 'You are offline'), el('span', '', 'Search is paused. Titles you opened before still work.'));
+        const actions = el('div', 'banner__actions');
+        actions.append(el('button', 'btn btn--ghost', 'Try again', { type: 'button' }));
+        body.append(actions);
+        banner.append(icon('alert'), body);
+        container.append(banner);
+      },
+      check(container) {
+        const text = container.querySelector('.banner').textContent;
+        return /offline/i.test(text) && /paused|still work/i.test(text) ? checkNoOverflow(container) : ['the offline banner gives no reason'];
+      },
+    },
+    {
+      name: 'Service picker',
+      render(container) {
+        const pick = el('div', 'service-pick');
+        const wrap = el('div', 'select-wrap');
+        const select = el('select', 'select', '', { id: 'service-pick', 'aria-label': 'Streaming service' });
+        for (const name of ['Netflix', 'Disney+']) select.append(el('option', '', name));
+        wrap.append(select, icon('chevron'));
+        pick.append(el('label', '', 'Service', { for: 'service-pick' }), wrap);
+        container.append(pick);
+      },
+      check: checkNoOverflow,
+    },
+    ...['closed', 'open'].map((state) => ({
+      name: `Country disclosure · ${state}`,
+      render(container) {
+        const details = el('details', 'disclosure');
+        if (state === 'open') details.open = true;
+        const summary = el('summary');
+        const chevron = icon('chevron');
+        chevron.classList.add('chev');
+        summary.append(el('span', 'group__title', 'Elsewhere in Europe'), el('span', 'disclosure__count', '12 countries'), chevron);
+        const list = el('ul', 'countries');
+        list.append(el('li', 'country country--static', 'France'));
+        details.append(summary, list);
+        container.append(details);
+      },
+      check: checkNoOverflow,
+    })),
+    {
+      name: 'Country row · hover',
+      render(container) {
+        const row = el('div', 'country');
+        const toggle = el('button', 'country__toggle is-hover', '', { type: 'button', 'aria-expanded': 'false' });
+        const name = el('span', 'country__name', 'France');
+        toggle.append(name, el('span', 'badge badge--disagree', 'Sources disagree'), icon('chevron'));
+        row.append(toggle);
+        container.append(row);
+      },
+      check: (container) => [...checkHover(container), ...checkNoOverflow(container)],
+    },
+    {
+      name: 'Theme radios',
+      render(container) {
+        const group = el('fieldset', 'segmented');
+        group.append(el('legend', 'visually-hidden', 'Theme'));
+        ['Auto', 'Light', 'Dark'].forEach((name, index) => {
+          const label = el('label');
+          const input = el('input', '', '', { type: 'radio', name: 'theme-sample', value: name.toLowerCase() });
+          input.checked = index === 2;
+          if (index === 1) { input.classList.add('is-focus'); input.dataset.expectFocus = 'true'; }
+          label.append(input, name);
+          group.append(label);
+        });
+        container.append(group);
+      },
+      check(container) {
+        const checkedLabel = container.querySelector('label:has(input:checked)');
+        const problems = checkFocusRing(container);
+        if (getComputedStyle(checkedLabel).boxShadow === 'none') problems.push('the selected theme has no marker');
+        return problems;
+      },
+    },
+    ...[['', 'Usage · normal', 0.3], ['caution', 'Usage · nearly reached', 0.9]].map(([kind, name, share]) => ({
+      name: `Quota · ${kind || 'normal'}`,
+      render(container) {
+        const usage = el('div', 'usage');
+        const meter = el('div', `meter${kind ? ` meter--${kind}` : ''}`);
+        const bar = el('div', 'meter__bar', '', { role: 'meter', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(share * 100), 'aria-label': name });
+        const fill = el('div', 'meter__fill');
+        fill.style.width = `${share * 100}%`;
+        bar.append(fill);
+        meter.append(el('span', '', `${Math.round(share * 100)} of 100 lookups used this month`), bar);
+        usage.append(meter);
+        container.append(usage);
+        if (kind) {
+          const banner = el('div', 'banner banner--caution', '', { role: 'status' });
+          const body = el('div');
+          body.append(el('strong', 'banner__title', 'Quota nearly reached'), el('span', '', 'Lookups pause at the limit.'));
+          banner.append(icon('alert'), body);
+          container.append(banner);
+        }
+      },
+      check: checkNoOverflow,
+    })),
+    {
+      name: 'Quota · exhausted',
+      render(container) {
+        const banner = el('div', 'banner banner--danger', '', { role: 'alert' });
+        const body = el('div');
+        body.append(el('strong', 'banner__title', 'Monthly quota used up'), el('span', '', 'Lookups resume next month.'));
+        banner.append(icon('alert'), body);
+        container.append(banner);
+      },
+      check: checkNoOverflow,
+    },
+    {
+      name: 'Confirmation dialog',
+      render(container) {
+        const dialog = el('div', 'dialog', '', { role: 'alertdialog', 'aria-labelledby': 'dialog-title' });
+        dialog.append(el('h2', '', 'Remove the saved key?', { id: 'dialog-title' }), el('p', 'muted', 'You will need to paste it again.'));
+        const row = el('div', 'btn-row');
+        row.append(el('button', 'btn btn--danger', 'Remove', { type: 'button' }), el('button', 'btn btn--secondary', 'Cancel', { type: 'button' }));
+        dialog.append(row);
+        container.append(dialog);
+      },
+      check(container) {
+        const dialog = container.querySelector('.dialog');
+        const problems = checkNoOverflow(container);
+        if (dialog.getBoundingClientRect().width > parseFloat(getComputedStyle(document.documentElement).fontSize) * 26 + 1) {
+          problems.push('the dialog exceeds its width cap');
+        }
+        return problems;
+      },
     },
   ];
 }
@@ -244,6 +437,7 @@ export default [
   ...bannerScenarios(),
   ...listScenarios(),
   ...panelScenarios(),
+  ...stateScenarios(),
 ];
 
 // Page-level check: the page must not scroll sideways at the current width.

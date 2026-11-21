@@ -7,7 +7,7 @@
   border-radius: var(--radius-md); border-left: var(--space-1) solid var(--color-border-strong);
   font-size: var(--text-sm);
 }
-.banner > .icon { margin-top: 0.1em; }
+.banner > .icon { margin-top: var(--icon-offset); }
 .banner--caution { border-left-color: var(--color-caution); }
 .banner--caution > .icon { color: var(--color-caution); }
 .banner--danger { border-left-color: var(--color-danger); }

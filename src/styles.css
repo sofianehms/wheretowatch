@@ -12,11 +12,11 @@ body {
 }
 h1, h2, h3, p, ul, ol, dl, dd, figure { margin: 0; }
 ul, ol { padding: 0; list-style: none; }
-a { color: inherit; text-underline-offset: 0.2em; }
+a { color: inherit; text-underline-offset: var(--underline-offset); }
 button, input, select { font: inherit; color: inherit; }
 .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 svg.icon { width: var(--icon-md); height: var(--icon-md); flex: none; fill: none; stroke: currentColor;
-  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  stroke-width: var(--icon-stroke); stroke-linecap: round; stroke-linejoin: round; }
 svg.icon--sm { width: var(--icon-sm); height: var(--icon-sm); }
 svg.icon--lg { width: var(--icon-lg); height: var(--icon-lg); }
 :focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
@@ -87,6 +87,7 @@ h1 { font-size: var(--text-xl); }
 .btn:disabled { background: transparent; color: var(--color-text-muted); border: var(--border-width) dashed var(--color-border-strong); cursor: not-allowed; }
 .btn:disabled:active { transform: none; }
 .btn--danger { background: transparent; color: var(--color-danger); border-color: var(--color-danger); }
+.btn--danger:hover { background: var(--color-surface-hover); }
 .icon-btn {
   display: inline-grid; place-items: center; width: var(--tap-size); height: var(--tap-size);
   padding: 0; border: 0; border-radius: var(--radius-round); background: transparent; color: var(--color-text); cursor: pointer;
@@ -106,10 +107,10 @@ p .link, li .link--inline { display: inline; min-height: 0; } /* links inside a 
 .tone-5 { --p-from: var(--poster-5-from); --p-to: var(--poster-5-to); }
 .tone-6 { --p-from: var(--poster-6-from); --p-to: var(--poster-6-to); }
 .poster {
-  display: grid; place-items: center; aspect-ratio: 2 / 3; width: 100%;
+  display: grid; place-items: center; aspect-ratio: var(--poster-ratio); width: 100%;
   border-radius: var(--radius-sm); overflow: hidden;
-  background: linear-gradient(160deg, var(--p-from, var(--poster-1-from)), var(--p-to, var(--poster-1-to)));
-  color: var(--poster-ink); font-weight: var(--weight-heavy); font-size: var(--text-sm); letter-spacing: 0.04em;
+  background: linear-gradient(var(--poster-angle), var(--p-from, var(--poster-1-from)), var(--p-to, var(--poster-1-to)));
+  color: var(--poster-ink); font-weight: var(--weight-heavy); font-size: var(--text-sm); letter-spacing: var(--tracking-poster);
   user-select: none;
 }
 .poster.poster--card { width: var(--poster-card); font-size: var(--text-xl); }
@@ -118,17 +119,17 @@ p .link, li .link--inline { display: inline; min-height: 0; } /* links inside a 
 .skeleton { background: var(--color-surface-raised); border-radius: var(--radius-sm);
   animation: pulse var(--duration-pulse) linear infinite alternate; }
 .skeleton--line { display: block; height: var(--space-4); }
-.skeleton--short { width: 40%; }
-.skeleton--mid { width: 65%; }
+.skeleton--short { width: var(--skeleton-short); }
+.skeleton--mid { width: var(--skeleton-mid); }
 .skeleton--row { display: block; height: var(--tap-size-lg); border-radius: var(--radius-md); }
 .skeleton-stack { display: grid; gap: var(--space-1); }
 .skeleton-stack > .skeleton--short { margin-bottom: var(--space-2); }
-@keyframes pulse { to { opacity: 0.5; } }
+@keyframes pulse { to { opacity: var(--pulse-opacity); } }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
 
 /* ---------- Dialog ---------- */
 .scrim { position: fixed; inset: 0; z-index: var(--z-dialog); display: grid; place-items: end center; padding: var(--space-4); background: var(--color-scrim); }
-.dialog { width: 100%; max-width: 26rem; display: grid; gap: var(--space-4); padding: var(--space-6);
+.dialog { width: 100%; max-width: var(--dialog-max); display: grid; gap: var(--space-4); padding: var(--space-6);
   background: var(--color-surface-raised); border-radius: var(--radius-lg); box-shadow: var(--shadow-md);
   animation: reveal var(--duration-base) var(--ease-out) both; }
 .dialog h2 { font-size: var(--text-lg); color: var(--color-text-strong); }
@@ -141,8 +142,10 @@ p .link, li .link--inline { display: inline; min-height: 0; } /* links inside a 
 .input-row { display: flex; align-items: center; gap: var(--space-1);
   background: var(--color-surface); border: var(--border-width) solid var(--color-border-strong); border-radius: var(--radius-sm); padding-left: var(--space-3); }
 .input-row:focus-within { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
-.input-row input { flex: 1; min-width: 0; min-height: var(--tap-size-lg); border: 0; background: transparent; font-size: var(--text-base); color: var(--color-text-strong); font-family: var(--font-sans); letter-spacing: 0.05em; }
+.input-row input { flex: 1; min-width: 0; min-height: var(--tap-size-lg); border: 0; background: transparent; font-size: var(--text-base); color: var(--color-text-strong); font-family: var(--font-sans); letter-spacing: var(--tracking-field); }
 .input-row input:focus { outline: none; }
+/* Disabled key field: dashed frame on the page color, like the disabled search field. */
+.input-row:has(input:disabled) { background: var(--color-bg); border-style: dashed; }
 .input-row input::placeholder { color: var(--color-text-muted); opacity: 1; letter-spacing: 0; }
 .input-row .btn--ghost { font-weight: var(--weight-medium); }
 .key-state { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); font-weight: var(--weight-medium); }
@@ -180,7 +183,7 @@ p .link, li .link--inline { display: inline; min-height: 0; } /* links inside a 
 @media (min-width: 48rem) {
   .app-header { grid-template-columns: auto 1fr auto; gap: var(--space-6); padding: var(--space-4) 0; }
   .app-header > .icon-btn { grid-column: 3; }
-  .header-search { grid-column: 2; grid-row: 1; max-width: 36rem; width: 100%; justify-self: center; }
+  .header-search { grid-column: 2; grid-row: 1; max-width: var(--search-max); width: 100%; justify-self: center; }
   .scrim { place-items: center; }
 }
 @media (min-width: 64rem) {
