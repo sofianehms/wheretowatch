@@ -105,12 +105,23 @@ async function checkSubpath() {
       });
       ctx.on('requestfailed', (request) => problems.add(`request failed: ${request.url()}`));
       const page = await ctx.newPage();
+      page.on('console', (message) => {
+        if (message.type() === 'error') problems.add(`console error: ${message.text()}`);
+      });
       page.on('pageerror', (error) => problems.add(`page error: ${error.message}`));
       await page.goto(mountedOrigin + prefix + '/', { waitUntil: 'networkidle' });
       await page.waitForFunction(async () => {
         const registration = await navigator.serviceWorker.getRegistration();
         return registration?.active?.state === 'activated';
       }, null, { timeout: 5000 });
+      const session = await ctx.newCDPSession(page);
+      const manifest = await session.send('Page.getAppManifest');
+      if (manifest.url !== mountedOrigin + prefix + '/manifest.webmanifest' || !manifest.data) {
+        problems.add('manifest did not load');
+      }
+      for (const error of manifest.errors) {
+        if (error.critical) problems.add(`manifest error: ${error.message}`);
+      }
     } catch (error) {
       problems.add(error.message);
     } finally {
@@ -120,7 +131,7 @@ async function checkSubpath() {
     mountedServer.close();
   }
   if (problems.size) problems.forEach((problem) => fail(`${label}: ${problem}`));
-  else ok(`${label} (no failed requests, service worker activated)`);
+  else ok(`${label} (console, service worker activated, manifest loaded)`);
 }
 
 async function checkTextZoom(route) {

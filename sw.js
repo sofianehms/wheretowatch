@@ -1,5 +1,5 @@
 // Minimal offline shell cache. A new worker waits and activates on the next launch. Bump CACHE when shipped files change.
-const CACHE = 'shell-v6';
+const CACHE = 'shell-v7';
 const SHELL = [
   './', 'index.html', 'design/tokens.css', 'src/styles.css', 'src/theme-boot.js', 'src/main.js', 'manifest.webmanifest',
   'icon.svg', 'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
