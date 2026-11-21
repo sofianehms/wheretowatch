@@ -1,0 +1,56 @@
+const targets = 'button, a[href], input, select, [role="option"], [tabindex]';
+const minimumTargetSize = 44;
+
+function checkTargets(container) {
+  const problems = [];
+  for (const target of container.querySelectorAll(targets)) {
+    if (!target.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    const { width, height } = target.getBoundingClientRect();
+    if (width < minimumTargetSize || height < minimumTargetSize) {
+      const label = target.getAttribute('aria-label') || target.textContent.trim() || target.id;
+      problems.push(`<${target.localName}>${label ? ` "${label}"` : ''} is ${width} × ${height} px (minimum 44 × 44 px)`);
+    }
+  }
+  return problems;
+}
+
+async function renderView() {
+  const view = new URLSearchParams(location.search).get('view');
+  if (!view || !/^[a-z][a-z0-9-]*$/.test(view)) return ['Choose a valid states view.'];
+
+  const { default: scenarios, check } = await import(`./states/${view}.js`);
+  const list = document.querySelector('#scenarios');
+  const problems = [];
+  const rendered = [];
+  for (const scenario of scenarios) {
+    const section = document.createElement('section');
+    const heading = document.createElement('h2');
+    heading.textContent = scenario.name;
+    const container = document.createElement('div');
+    section.append(heading, container);
+    list.append(section);
+    try {
+      await scenario.render(container);
+      rendered.push({ scenario, container });
+    } catch (error) {
+      problems.push(`${scenario.name}: ${error.message}`);
+    }
+  }
+
+  await document.fonts.ready;
+  for (const { scenario, container } of rendered) {
+    problems.push(...checkTargets(container).map((problem) => `${scenario.name}: ${problem}`));
+    try {
+      const issues = await scenario.check?.(container) ?? [];
+      problems.push(...issues.map((problem) => `${scenario.name}: ${problem}`));
+    } catch (error) {
+      problems.push(`${scenario.name}: ${error.message}`);
+    }
+  }
+  const issues = await check?.() ?? [];
+  problems.push(...issues.map((problem) => `${view}: ${problem}`));
+  return problems;
+}
+
+// Wait for imports and asynchronous renders before capturing or auditing the page.
+window.statesReady = renderView().catch((error) => [error.message]);
