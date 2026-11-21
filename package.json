@@ -8,14 +8,15 @@
     "start": "node scripts/serve.mjs",
     "lint": "node scripts/lint.mjs",
     "test": "node scripts/run-tests.mjs",
-    "verify": "node scripts/verify.mjs",
-    "coverage": "node --experimental-test-coverage scripts/run-tests.mjs"
+    "coverage": "node scripts/coverage.mjs",
+    "verify": "node scripts/verify.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "acorn": "^8.19.0",
     "chrome-launcher": "^1.2.3",
     "lighthouse": "^12.8.2",
     "playwright-core": "^1.65.1"

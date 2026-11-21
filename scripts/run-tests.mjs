@@ -1,23 +1,7 @@
 // Runs every test/**/*.test.js file with the Node test runner and fails when no test ran.
 import { spawnSync } from 'node:child_process';
-import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { files } from './test-files.mjs';
 
-function collect(dir) {
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  return entries.flatMap((e) => {
-    const p = join(dir, e.name);
-    if (e.isDirectory()) return collect(p);
-    return e.name.endsWith('.test.js') ? [p] : [];
-  });
-}
-
-const files = collect('test').sort();
 if (files.length === 0) {
   console.error('No test files found: expected test/**/*.test.js. Refusing to pass with zero tests.');
   process.exit(1);
