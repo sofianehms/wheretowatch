@@ -7,8 +7,5 @@ input.addEventListener('input', () => {
 });
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  // Let the initial page resources load before the worker starts filling the offline cache.
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  }, { once: true });
+  navigator.serviceWorker.register('sw.js').catch(() => {});
 }

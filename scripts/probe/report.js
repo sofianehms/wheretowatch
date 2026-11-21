@@ -37,7 +37,15 @@ function rateRow(label, observations) {
 }
 
 function languageReport({ region, sampleSize, selected, discovery, titles }) {
-  const sample = titles.map((title) => ({ ...title, observations: languagePresence(title.body) }));
+  const sample = titles.map((title) => {
+    const options = title.body?.streamingOptions;
+    const usable = title.status === 200 && options && typeof options === 'object' && !Array.isArray(options);
+    return { ...title, usable, observations: usable ? languagePresence(title.body) : [] };
+  });
+  const usableCount = sample.filter(({ usable }) => usable).length;
+  const contributingCount = sample.filter(({ observations }) => observations.length).length;
+  const measurement = usableCount < sampleSize ? 'Incomplete'
+    : contributingCount === 0 ? 'Inconclusive (no Netflix offers observed)' : 'Complete';
   const observations = sample.flatMap((title) => title.observations);
   const countries = [...new Set(observations.map(({ country }) => country))].sort();
   return [
@@ -46,8 +54,7 @@ function languageReport({ region, sampleSize, selected, discovery, titles }) {
     '- Discovery region: ' + region,
     '- Distinct movies selected: ' + selected + '/' + sampleSize,
     '- Streaming Availability requests sent: ' + titles.length + '/' + sampleSize,
-    '- Show responses with a streaming options map: ' + titles.filter(({ body }) =>
-      body?.streamingOptions && typeof body.streamingOptions === 'object' && !Array.isArray(body.streamingOptions)).length,
+    '- Show responses with a streaming options map: ' + usableCount + '/' + sampleSize,
     '- Last discovery response: ' + (discovery?.status ?? 'not observed') + ' (' + (discovery?.anomaly ?? 'no anomaly') + ')',
     ...(selected < sampleSize ? ['- No show requests sent because discovery did not fill the sample.'] : []),
     '',
@@ -55,6 +62,9 @@ function languageReport({ region, sampleSize, selected, discovery, titles }) {
       'in that pair lists a language for it. Closed captions require a subtitle language marked as closed captions.',
     '',
     '### FR-009 — Observed overall and country fill rates',
+    '',
+    '- Measurement status: ' + measurement,
+    '- Titles contributing to the observed rates: ' + contributingCount + '/' + sampleSize,
     '',
     '| Scope | Audio languages | Subtitles | Closed captions |',
     '| --- | --- | --- | --- |',

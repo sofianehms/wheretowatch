@@ -64,7 +64,7 @@ test('counts each Netflix country once and distinguishes audio, subtitles and cl
 test('renders fixture findings without raw values or a fictitious key in headers and identifiers', (context) => {
   const key = 'fixture.key+[123]';
   const observed = (label, body, headers = {}) => ({ label, status: 200, body, headers });
-  const report = renderReport({
+  const fixture = {
     origin: 'https://wheretowatch.example',
     keys: [key],
     tmdb: {
@@ -86,11 +86,12 @@ test('renders fixture findings without raw values or a fictitious key in headers
     },
     region: 'FR',
     v05: {
-      region: 'FR', sampleSize: 20, selected: 20,
+      region: 'FR', sampleSize: 2, selected: 2,
       titles: [show, series].map((body, index) => ({ ...observed('Show', body), id: index + 1 })),
     },
     v18: observed('GET /v4/shows/search/title', [show, series], { 'x-quota-remaining': '88' }),
-  });
+  };
+  const report = renderReport(fixture);
 
   for (const heading of ['V-01 — TMDB', 'V-02 — Streaming Availability', 'Service identifiers']) {
     assert.ok(report.includes('## ' + heading + '\n\nStatus: observed'));
@@ -113,11 +114,24 @@ test('renders fixture findings without raw values or a fictitious key in headers
     '| 1 / FR | 0/1 (0.0%) | 0/1 (0.0%) | 0/1 (0.0%) |',
   ];
   for (const row of rates) assert.ok(report.includes(row), row);
+  assert.match(report, /Measurement status: Complete\n- Titles contributing to the observed rates: 2\/2\n/);
   context.diagnostic('V-05 fixture rates (audio, subtitles, closed captions)');
   for (const row of rates) context.diagnostic(row);
   assert.match(report, /Countries present: fr, us/);
   assert.match(report, /Results with offers in every country returned by \/countries: 1\/2/);
   assert.match(report, /x-quota-remaining: 1\n/);
+
+  const rateLimited = { id: 2, status: 429, anomaly: 'Unexpected HTTP status.' };
+  for (const sampleSize of [2, 20]) {
+    const partial = renderReport({
+      ...fixture,
+      v05: { ...fixture.v05, sampleSize, selected: sampleSize, titles: [fixture.v05.titles[0], rateLimited] },
+    });
+    assert.ok(partial.includes('Streaming Availability requests sent: 2/' + sampleSize));
+    assert.ok(partial.includes('Measurement status: Incomplete\n- Titles contributing to the observed rates: 1/' + sampleSize));
+    assert.match(partial, /\| Overall \| 1\/2 \(50\.0%\) \| 1\/2 \(50\.0%\) \| 1\/2 \(50\.0%\) \|/);
+    assert.match(partial, /2 \(HTTP 429, Unexpected HTTP status\.\)/);
+  }
 });
 
 const repo = fileURLToPath(new URL('../', import.meta.url));
