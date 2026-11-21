@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { checkSaKey, checkTmdbKey } from '../src/api/keycheck.js';
+import { createQuota } from '../src/api/quota.js';
 import saQuota from './fixtures/sa/quota-exhausted.js';
 
 const dummyKey = 'fake-key-for-tests';
@@ -43,13 +44,10 @@ for (const { name, check, url, headers, records } of providers) {
       const pending = check(dummyKey, { quota, fetchImpl, timeoutMs: 25 });
       if (result === 'timeout') t.mock.timers.tick(25);
 
-      const outcome = await pending;
-      assert.equal(outcome, result);
-      assert.ok(!outcome.includes(dummyKey));
+      assert.equal(await pending, result);
       assert.equal(fetchImpl.mock.callCount(), 1);
       const [target, options] = fetchImpl.mock.calls[0].arguments;
       assert.equal(target, url);
-      assert.ok(!target.includes(dummyKey));
       assert.deepEqual(options.headers, headers);
       assert.equal(options.method ?? 'GET', 'GET');
       assert.equal(options.cache, 'no-store');
@@ -66,6 +64,23 @@ test('a blocked Streaming Availability check neither fetches nor records', async
   assert.equal(await checkSaKey(dummyKey, { quota, fetchImpl }), 'quota');
   assert.equal(fetchImpl.mock.callCount(), 0);
   assert.equal(quota.record.mock.callCount(), 0);
+});
+
+test('a Streaming Availability quota storage read failure returns network without fetching or recording', async (t) => {
+  const storage = {
+    getItem() {
+      throw new DOMException('Storage access denied.', 'SecurityError');
+    },
+    setItem: t.mock.fn(),
+  };
+  const quota = createQuota({ storage });
+  const record = t.mock.method(quota, 'record');
+  const fetchImpl = t.mock.fn();
+
+  assert.equal(await checkSaKey(dummyKey, { quota, fetchImpl }), 'network');
+  assert.equal(fetchImpl.mock.callCount(), 0);
+  assert.equal(record.mock.callCount(), 0);
+  assert.equal(storage.setItem.mock.callCount(), 0);
 });
 
 test('an offline Streaming Availability check does not spend quota', async (t) => {
