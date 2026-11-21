@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 
 const boot = readFileSync('src/theme-boot.js', 'utf8');
 const tokens = readFileSync('design/tokens.css', 'utf8');
@@ -38,5 +39,26 @@ test('index.html loads theme-boot.js synchronously after the stylesheets and bef
 test('manifest colors equal the dark --color-bg', () => {
   assert.equal(manifest.theme_color.toLowerCase(), darkBg);
   assert.equal(manifest.background_color.toLowerCase(), darkBg);
-  assert.match(html, new RegExp(`<meta name="theme-color" content="${darkBg}">`, 'i'));
+  assert.doesNotMatch(html, /<meta name="theme-color"[^>]*content=/i, 'theme-color is filled from --color-bg by the boot script');
+});
+
+test('theme-boot.js sets data-theme and fills theme-color from the computed --color-bg', () => {
+  const run = (stored) => {
+    const attrs = {};
+    const meta = { setAttribute: (k, v) => { attrs.meta = v; } };
+    const root = { setAttribute: (k, v) => { attrs[k] = v; } };
+    const sandbox = {
+      window: {},
+      document: { documentElement: root, querySelector: () => meta },
+      getComputedStyle: () => ({ getPropertyValue: () => ' sample-bg ' }),
+      localStorage: { getItem: () => { if (stored === 'throw') throw new Error('denied'); return stored; } },
+    };
+    vm.runInNewContext(boot, sandbox);
+    return attrs;
+  };
+  assert.deepEqual(run(null), { 'data-theme': 'dark', meta: 'sample-bg' });
+  assert.equal(run('light')['data-theme'], 'light');
+  assert.equal(run('auto')['data-theme'], 'auto');
+  assert.equal(run('bogus')['data-theme'], 'dark');
+  assert.equal(run('throw')['data-theme'], 'dark');
 });
