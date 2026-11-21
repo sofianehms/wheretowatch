@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parse } from 'acorn';
 
 import { applyStaticStrings, countryName, formatDate, getLocale, languageName, setLocale, t } from '../src/i18n/strings.js';
 
@@ -63,16 +64,43 @@ test('static translations replace existing root text and descendant attributes',
   assert.equal(input.textContent, 'Existing text');
 });
 
-const trivia = /(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\r\n\u2028\u2029]*)*/.source;
-const propertyName = 'textContent|placeholder|title|alt|ariaLabel';
-const property = String.raw`(?:\.${trivia}(?:${propertyName})\b|\[${trivia}(['"\x60])(?:${propertyName}|aria-label)\1${trivia}\])`;
-const literal = /(?:"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|\$(?!\{)|[^`\\$])*`)/.source;
-const literalValue = String.raw`${trivia}(?:\(${trivia})*${literal}`;
-const literalPatterns = [
-  new RegExp(String.raw`${property}${trivia}(?:\+|\?\?|\|\||&&)?=${literalValue}`),
-  new RegExp(String.raw`\bsetAttribute${trivia}\(${trivia}(['"\x60])aria-[\w-]+\1${trivia},${literalValue}`),
-  new RegExp(String.raw`\bcreateTextNode${trivia}\(${literalValue}`),
-];
+const textProperty = /^(?:textContent|placeholder|title|alt|ariaLabel|aria-label)$/;
+const ariaAttribute = /^aria-[\w-]+$/;
+
+function stringLiteral(node) {
+  if (node?.type === 'Literal' && typeof node.value === 'string') return node.value;
+  if (node?.type === 'TemplateLiteral' && node.expressions.length === 0) {
+    return node.quasis[0].value.cooked;
+  }
+}
+
+function memberName(node) {
+  if (node.type !== 'MemberExpression') return;
+  return node.computed ? stringLiteral(node.property) : node.property.name;
+}
+
+function findLiteralText(source) {
+  const pending = [parse(source, { ecmaVersion: 'latest', sourceType: 'module', locations: true })];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (node.type === 'AssignmentExpression' && textProperty.test(memberName(node.left)) &&
+        typeof stringLiteral(node.right) === 'string') {
+      return node;
+    }
+    if (node.type === 'CallExpression') {
+      const name = node.callee.type === 'Identifier' ? node.callee.name : memberName(node.callee);
+      const [first, second] = node.arguments;
+      if ((name === 'createTextNode' && typeof stringLiteral(first) === 'string') ||
+          (name === 'setAttribute' && ariaAttribute.test(stringLiteral(first)) &&
+           typeof stringLiteral(second) === 'string')) {
+        return node;
+      }
+    }
+    for (const child of Object.values(node).flat()) {
+      if (child?.type) pending.push(child);
+    }
+  }
+}
 
 test('render rule detects literal text and accepts translated values', () => {
   const literals = [
@@ -83,7 +111,10 @@ test('render rule detects literal text and accepts translated values', () => {
     "el.alt = 'Search'",
     "el['aria-label'] = 'Search'",
     "el.setAttribute('aria-label', /* copy */ 'Search')",
+    "el['setAttribute']('aria-label', 'Search')",
     "document.createTextNode(/* copy */ 'Search')",
+    "document.createTextNode?.('Search')",
+    '`${document?.["createTextNode"](`Search`)}`',
   ];
   const allowed = [
     "el.ariaLabel = t('search.label')",
@@ -93,13 +124,18 @@ test('render rule detects literal text and accepts translated values', () => {
     "el.setAttribute('data-state', 'loading')",
     "document.createTextNode(t('search.label'))",
     'el.title = `${label}`',
+    "// el.textContent = 'Search'",
+    "/* document.createTextNode?.('Search') */",
+    'const example = "el.textContent = \'Search\'";',
+    'const example = /el.textContent = \'Search\'/;',
+    "el[setAttribute]('aria-label', 'Search')",
   ];
 
   for (const source of literals) {
-    assert.ok(literalPatterns.some((pattern) => pattern.test(source)), source);
+    assert.ok(findLiteralText(source), source);
   }
   for (const source of allowed) {
-    assert.ok(literalPatterns.every((pattern) => !pattern.test(source)), source);
+    assert.equal(findLiteralText(source), undefined, source);
   }
 });
 
@@ -110,9 +146,9 @@ test('render modules do not assign literal interface text', () => {
   for (const entry of files.filter((file) => /\.[cm]?js$/.test(file))) {
     const file = join(renderDir, entry);
     const source = readFileSync(file, 'utf8');
-    for (const pattern of literalPatterns) {
-      const match = pattern.exec(source);
-      assert.ok(!match, `${file}:${source.slice(0, match?.index).split('\n').length}: ${match?.[0]}`);
+    const match = findLiteralText(source);
+    if (match) {
+      assert.fail(`${file}:${match.loc.start.line}: ${source.slice(match.start, match.end)}`);
     }
   }
 });
