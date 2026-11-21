@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Where to Watch</title>
-  <meta name="description" content="Find where to watch any movie or series, and in which countries it is available on Netflix and other streaming services.">
+  <title data-i18n="common.name">Where to Watch</title>
+  <meta name="description" data-i18n="common.description" data-i18n-attr="content" content="Find where to watch any movie or series, and in which countries it is available on Netflix and other streaming services.">
   <meta name="theme-color">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
@@ -15,12 +15,12 @@
 </head>
 <body>
   <main class="app">
-    <h1>Where to Watch</h1>
+    <h1 data-i18n="common.name">Where to Watch</h1>
     <form class="search" role="search">
-      <label for="q" class="visually-hidden">Search</label>
-      <input id="q" name="q" type="search" placeholder="Search" autocomplete="off" enterkeyhint="search">
+      <label for="q" class="visually-hidden" data-i18n="search.label">Search</label>
+      <input id="q" name="q" type="search" data-i18n="search.placeholder" data-i18n-attr="placeholder" placeholder="Search" autocomplete="off" enterkeyhint="search">
     </form>
-    <p id="status" class="muted" role="status" aria-live="polite">Type to search.</p>
+    <p id="status" class="muted" role="status" aria-live="polite" data-i18n="search.hint">Type to search.</p>
     <ul id="results" class="results"></ul>
   </main>
   <script type="module" src="src/main.js"></script>
