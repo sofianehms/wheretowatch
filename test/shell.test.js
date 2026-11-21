@@ -1,55 +1,75 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join, posix } from 'node:path';
 
 const sw = readFileSync('sw.js', 'utf8');
 const shellSrc = sw.match(/const SHELL = \[([^\]]*)\]/);
 assert.ok(shellSrc, 'SHELL array not found in sw.js');
-const SHELL = [...shellSrc[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
 
-const isLocal = (u) => !/^([a-z][a-z0-9+.-]*:|\/\/|#|data:)/i.test(u);
-const clean = (u) => posix.normalize(u.split(/[?#]/)[0]);
-const inShell = (p) => SHELL.map((s) => (s === './' ? 'index.html' : posix.normalize(s))).includes(p);
+const scope = new URL('https://shell.example/');
+const documentUrl = new URL('index.html', scope);
+
+function requestUrl(reference, base) {
+  const url = new URL(reference, base);
+  url.hash = '';
+  return url;
+}
+
+function diskPath(url) {
+  return url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname.slice(1));
+}
+
+const SHELL = new Set([...shellSrc[1].matchAll(/(['"])(.*?)\1/g)]
+  .map((match) => requestUrl(match[2], scope).href));
+
+const html = readFileSync('index.html', 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+const resources = [];
+for (const [, tag, attributes] of html.matchAll(/<(link|script)\b((?:[^'">]|"[^"]*"|'[^']*')*)>/gi)) {
+  const name = tag.toLowerCase() === 'link' ? 'href' : 'src';
+  const attribute = [...attributes.matchAll(/([^\s=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s]+)))?/g)]
+    .find((match) => match[1].toLowerCase() === name);
+  const reference = attribute?.[2] ?? attribute?.[3] ?? attribute?.[4];
+  if (!reference) continue;
+  const url = requestUrl(reference, documentUrl);
+  if (url.origin === scope.origin) resources.push({ name, url });
+}
 
 function staticImports(file) {
   const src = readFileSync(file, 'utf8');
-  const re = /(?:^|[;\s])(?:import|export)\s+(?:[^'"()]*?\s+from\s+)?['"]([^'"]+)['"]/g;
-  return [...src.matchAll(re)].map((m) => m[1]).filter((s) => s.startsWith('.'));
+  const re = /(?:^|[;\s])(?:import|export)\b\s*(?:[^'"();]*?\s+from\s*)?(['"])([^'"]+)\1/g;
+  return [...src.matchAll(re)].map((match) => match[2])
+    .filter((specifier) => /^(?:\.\.?\/|\/|[a-z][a-z\d+.-]*:)/i.test(specifier));
 }
 
-function reachable(entry, seen = new Set()) {
-  if (seen.has(entry)) return seen;
-  seen.add(entry);
-  for (const spec of staticImports(entry)) {
-    reachable(posix.normalize(join(dirname(entry), spec)), seen);
+function checkModule(url, seen) {
+  if (seen.has(url.href)) return;
+  seen.add(url.href);
+  assert.ok(SHELL.has(url.href), `module not in SHELL: ${url.pathname.slice(1)}${url.search}`);
+  for (const specifier of staticImports(diskPath(url))) {
+    const dependency = requestUrl(specifier, url);
+    if (dependency.origin === scope.origin) checkModule(dependency, seen);
   }
-  return seen;
 }
 
 test('every SHELL entry exists on disk', () => {
   for (const entry of SHELL) {
-    const p = entry === './' ? 'index.html' : clean(entry);
-    assert.ok(existsSync(p), `SHELL entry missing on disk: ${entry}`);
+    const url = new URL(entry);
+    assert.equal(url.origin, scope.origin, `SHELL entry is not local: ${entry}`);
+    assert.ok(existsSync(diskPath(url)), `SHELL entry missing on disk: ${entry}`);
   }
 });
 
 test('every local resource of index.html is in SHELL', () => {
-  const html = readFileSync('index.html', 'utf8');
-  const refs = [...html.matchAll(/<(?:link|script)\b[^>]*?\b(?:href|src)="([^"]+)"/g)].map((m) => m[1]).filter(isLocal);
-  assert.ok(refs.length > 0, 'no local resource found in index.html');
-  for (const ref of refs) {
-    assert.ok(inShell(clean(ref)), `not in SHELL: ${ref}`);
+  assert.ok(resources.length > 0, 'no local resource found in index.html');
+  for (const { url } of resources) {
+    assert.ok(SHELL.has(url.href), `not in SHELL: ${url.pathname.slice(1)}${url.search}`);
   }
 });
 
 test('modules reachable through static imports are in SHELL', () => {
-  const html = readFileSync('index.html', 'utf8');
-  const scripts = [...html.matchAll(/<script\b[^>]*?\bsrc="([^"]+)"/g)].map((m) => clean(m[1])).filter((s) => isLocal(s));
-  for (const s of scripts) {
-    for (const mod of reachable(s)) {
-      assert.ok(inShell(mod), `module not in SHELL: ${mod}`);
-    }
+  const seen = new Set();
+  for (const { name, url } of resources) {
+    if (name === 'src') checkModule(url, seen);
   }
 });
 
