@@ -101,10 +101,11 @@ test('persistence is requested once after saving a key and rejection does not af
   assert.equal(settings.hasKey('sa'), true);
 });
 
-test('clearAll removes all app entries, clears in-memory cache, and resets quota', () => {
+test('clearAll removes all app entries, clears in-memory cache, and resets quota', (t) => {
   const { data, storage } = fixture();
   const cache = createCache({ storage });
   const quota = createQuota({ storage });
+  const reset = t.mock.method(quota, 'reset');
   const settings = createSettings({ storage, cache, quota });
   settings.setKey('tmdb', randomUUID());
   settings.setKey('sa', randomUUID());
@@ -120,6 +121,24 @@ test('clearAll removes all app entries, clears in-memory cache, and resets quota
 
   assert.deepEqual([...data.keys()], ['unrelated']);
   assert.deepEqual(cache.stats(), { entries: 0, bytes: 0 });
+  assert.equal(reset.mock.callCount(), 1);
   assert.equal(quota.status().used, 0);
   assert.equal(quota.canCall(), true);
+});
+
+test('clearAll removes other app entries when one removal fails', () => {
+  const { data, storage } = fixture();
+  const removeItem = storage.removeItem;
+  storage.removeItem = (name) => {
+    if (name === 'wtw.old') throw new Error('Removal denied');
+    removeItem(name);
+  };
+  const settings = createSettings({ storage });
+  settings.setKey('tmdb', randomUUID());
+  storage.setItem('wtw.old', 'old');
+  settings.setPref('theme', 'light');
+  storage.setItem('unrelated', 'keep');
+
+  assert.throws(() => settings.clearAll(), { message: 'Could not clear all settings.' });
+  assert.deepEqual([...data.keys()], ['wtw.old', 'unrelated']);
 });

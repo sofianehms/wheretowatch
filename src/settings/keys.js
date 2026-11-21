@@ -23,6 +23,13 @@ function storageName(names, name, segment = '') {
   return prefix + segment + name;
 }
 
+/**
+ * Preferences use lowercase country codes, service IDs, theme values `dark`,
+ * `light`, or `auto`, and language tags for `lang`. Pass `null` to `setPref`
+ * to remove the stored preference and restore its default.
+ * Writes and removals throw a generic error if storage fails. `clearAll`
+ * attempts every removal and throws a generic error if any cleanup fails.
+ */
 export function createSettings({
   storage = browserStorage(), navigatorLike = globalThis.navigator, cache, quota,
 } = {}) {
@@ -66,21 +73,33 @@ export function createSettings({
   }
 
   function clearStorage() {
+    let succeeded = true;
     for (let index = storage.length - 1; index >= 0; index -= 1) {
       const name = storage.key(index);
-      if (name?.startsWith(prefix)) storage.removeItem(name);
+      if (!name?.startsWith(prefix)) continue;
+      try {
+        storage.removeItem(name);
+      } catch {
+        succeeded = false;
+      }
     }
+    return succeeded;
   }
 
   function clearAll() {
     let failed = false;
     // Reset quota before removing storage entries because reset writes to storage.
-    for (const clear of [() => cache?.clear(), () => quota?.reset(), clearStorage]) {
+    for (const clear of [() => cache?.clear(), () => quota?.reset()]) {
       try {
         clear();
       } catch {
         failed = true;
       }
+    }
+    try {
+      if (!clearStorage()) failed = true;
+    } catch {
+      failed = true;
     }
     if (failed) throw new Error('Could not clear all settings.');
   }
