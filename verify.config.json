@@ -5,6 +5,6 @@
     { "name": "mobile", "width": 390, "height": 844, "mobile": true },
     { "name": "desktop", "width": 1280, "height": 800, "mobile": false }
   ],
-  "schemes": ["light", "dark"],
+  "schemes": ["dark", "light"],
   "thresholds": { "accessibility": 95, "best-practices": 90, "seo": 90, "performance": 90 }
 }
