@@ -10,34 +10,62 @@ export const initialState = Object.freeze({
   settingsOpen: false,
 });
 
+/**
+ * Store primitives, arrays, and plain records as immutable snapshots.
+ * Shallow equality uses Object.is against each field's input and snapshot.
+ * A subscriber's set() queues an update for after the current notification.
+ * The outer set() rethrows a subscriber error after draining the queue,
+ * or throws an AggregateError if multiple subscriber calls failed.
+ */
 export function createStore(initial = initialState) {
   const snapshots = new WeakSet();
-  let state = freezeCopy({ ...initial }, snapshots);
+  const inputs = { ...initial };
+  let current = { inputs, snapshot: freezeCopy(inputs, snapshots) };
   const listeners = new Set();
   const pending = [];
 
   return {
     get() {
-      return state;
+      return current.snapshot;
     },
     set(patch) {
-      const previous = pending.at(-1) ?? state;
-      const next = { ...previous, ...patch };
-      if (Reflect.ownKeys(next).every((key) =>
-        Object.hasOwn(previous, key) && Object.is(next[key], previous[key]))) return;
+      const previous = pending.at(-1) ?? current;
+      const values = { ...patch };
+      const changed = Reflect.ownKeys(values).filter((key) =>
+        !Object.hasOwn(previous.snapshot, key) ||
+        (!Object.is(values[key], previous.inputs[key]) &&
+          !Object.is(values[key], previous.snapshot[key])));
+      if (changed.length === 0) return;
+
+      const nextInputs = { ...previous.inputs };
+      const next = { ...previous.snapshot };
+      for (const key of changed) {
+        const descriptor = Object.getOwnPropertyDescriptor(values, key);
+        Object.defineProperty(nextInputs, key, descriptor);
+        Object.defineProperty(next, key, descriptor);
+      }
 
       // Publish nested updates in order after the current notification finishes.
-      pending.push(freezeCopy(next, snapshots));
+      pending.push({ inputs: nextInputs, snapshot: freezeCopy(next, snapshots) });
       if (pending.length > 1) return;
 
+      const errors = [];
       try {
         for (let index = 0; index < pending.length; index++) {
-          state = pending[index];
-          for (const listener of [...listeners]) listener(state);
+          current = pending[index];
+          for (const listener of [...listeners]) {
+            try {
+              listener(current.snapshot);
+            } catch (error) {
+              errors.push(error);
+            }
+          }
         }
       } finally {
         pending.length = 0;
       }
+      if (errors.length === 1) throw errors[0];
+      if (errors.length > 1) throw new AggregateError(errors, 'State subscribers failed.');
     },
     subscribe(listener) {
       const subscription = (snapshot) => listener(snapshot);

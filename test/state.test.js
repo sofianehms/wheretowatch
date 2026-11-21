@@ -57,6 +57,27 @@ test('an undefined value adds an own property and notifies only once', () => {
   assert.ok(Object.hasOwn(store.get(), 'extra'));
 });
 
+test('reapplying the original array and record references preserves the snapshot', () => {
+  const store = createStore();
+  const patch = { suggestions: [{ id: 1 }], selected: { id: 1 } };
+  const notifications = [];
+  store.subscribe((snapshot) => notifications.push(snapshot));
+
+  store.set(patch);
+  const snapshot = store.get();
+  store.set(patch);
+  store.set({ ...patch, searchStatus: 'results' });
+
+  assert.equal(notifications.length, 2);
+  assert.strictEqual(notifications[0], snapshot);
+  assert.strictEqual(store.get().suggestions, snapshot.suggestions);
+  assert.strictEqual(store.get().selected, snapshot.selected);
+
+  store.set({ suggestions: [{ id: 1 }] });
+  assert.equal(notifications.length, 3);
+  assert.notStrictEqual(store.get().suggestions, snapshot.suggestions);
+});
+
 test('updates from listeners are published in order after the current notification', () => {
   const store = createStore();
   const received = [];
@@ -80,6 +101,40 @@ test('updates from listeners are published in order after the current notificati
     ['second', 'results'],
   ]);
   assert.deepEqual(store.get().suggestions, [{ id: 1 }]);
+});
+
+test('a subscriber error surfaces after all subscribers receive accepted updates', () => {
+  const store = createStore();
+  const failure = new Error('Subscriber failed');
+  const received = [];
+  store.subscribe(({ searchStatus }) => {
+    if (searchStatus !== 'loading') return;
+    store.set({ searchStatus: 'results' });
+    assert.equal(store.get().searchStatus, 'loading');
+    throw failure;
+  });
+  store.subscribe(({ searchStatus }) => received.push(searchStatus));
+
+  assert.throws(() => store.set({ searchStatus: 'loading' }), (error) => error === failure);
+  assert.equal(store.get().searchStatus, 'results');
+  assert.deepEqual(received, ['loading', 'results']);
+
+  store.set({ searchStatus: 'idle' });
+  assert.deepEqual(received, ['loading', 'results', 'idle']);
+});
+
+test('multiple subscriber failures are reported in notification order', () => {
+  const store = createStore();
+  const first = new Error('First subscriber failed');
+  const second = new Error('Second subscriber failed');
+  store.subscribe(() => { throw first; });
+  store.subscribe(() => { throw second; });
+
+  assert.throws(() => store.set({ query: 'Arrival' }), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.deepEqual(error.errors, [first, second]);
+    return true;
+  });
 });
 
 test('unsubscribing removes only the corresponding subscription', () => {
