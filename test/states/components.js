@@ -35,7 +35,11 @@ function buttonScenarios() {
       const problems = [...checkFocusRing(container), ...checkHover(container), ...checkNoOverflow(container)];
       if (variant === 'normal') problems.push(...checkResting(button, resting));
       if (variant === 'hover' && kind === 'primary') problems.push(...checkResting(button, { color: '--color-accent-text' }));
-      if (variant === 'disabled') problems.push(...checkDisabledControl(button));
+      if (variant === 'disabled') {
+        problems.push(...checkDisabledControl(button));
+        if (getComputedStyle(button).opacity !== resolveToken('--disabled-opacity', 'opacity')) problems.push('the disabled button is not at the disabled opacity');
+        if (getComputedStyle(button).borderTopStyle === 'dashed') problems.push('the disabled button uses the field frame');
+      }
       return problems;
     },
   })));
@@ -53,7 +57,7 @@ function iconButtonScenarios() {
       const button = container.querySelector('.icon-btn');
       const problems = [...checkFocusRing(container), ...checkHover(container)];
       if (variant === 'normal') problems.push(...checkResting(button, { color: '--color-text' }));
-      if (variant === 'disabled') problems.push(...checkDisabledControl(button), ...checkResting(button, { color: '--color-text-muted' }));
+      if (variant === 'disabled') problems.push(...checkDisabledControl(button), ...checkResting(button, { color: '--color-text' }));
       return problems;
     },
   }));
@@ -123,6 +127,109 @@ function searchBox({ value = '', disabled = false } = {}) {
   return form;
 }
 
+const suggestions = [
+  ['Dark', 'Series · 2015', 'tone-1', 'DA'],
+  ['Dune', 'Movie · 2021', 'tone-3', 'DU'],
+];
+
+// One connected combobox: the input owns the listbox, and the arrow keys move the active option.
+function comboboxScenario() {
+  return {
+    name: 'Search · combobox keyboard',
+    render(container) {
+      const wrap = el('div', 'search sample-anchor');
+      const frame = el('div', 'search__field');
+      const input = el('input', 'search__input', '', {
+        type: 'search', role: 'combobox', 'aria-label': 'Search for a title', 'aria-autocomplete': 'list',
+        'aria-expanded': 'true', 'aria-controls': 'combo-list',
+      });
+      input.value = 'dun';
+      frame.append(icon('search'), input);
+      const list = el('ul', 'listbox', '', { role: 'listbox', id: 'combo-list', 'aria-label': 'Suggestions' });
+      suggestions.forEach(([title, meta, tone, initials], index) => {
+        const option = el('li', 'option', '', { role: 'option', id: `combo-option-${index}`, 'aria-selected': 'false' });
+        const lines = el('span', 'option__lines');
+        lines.append(el('span', 'option__title', title), el('span', 'option__meta', meta));
+        option.append(el('div', `poster ${tone}`, initials, { 'aria-hidden': 'true' }), lines);
+        option.addEventListener('mousedown', (event) => event.preventDefault());
+        list.append(option);
+      });
+      const status = el('p', 'visually-hidden', `${suggestions.length} results available.`, { role: 'status' });
+      wrap.append(frame, list, status);
+      container.append(wrap);
+
+      let active = -1;
+      const options = [...list.children];
+      const setOpen = (open) => {
+        list.hidden = !open;
+        input.setAttribute('aria-expanded', String(open));
+        if (!open) setActive(-1);
+      };
+      const setActive = (index) => {
+        active = index;
+        options.forEach((option, position) => option.setAttribute('aria-selected', String(position === index)));
+        if (index < 0) input.removeAttribute('aria-activedescendant');
+        else input.setAttribute('aria-activedescendant', options[index].id);
+      };
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          setOpen(true);
+          setActive((active + 1) % options.length);
+        } else if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          setOpen(true);
+          setActive((active - 1 + options.length) % options.length);
+        } else if (event.key === 'Enter' && active >= 0) {
+          event.preventDefault();
+          input.value = options[active].querySelector('.option__title').textContent;
+          setOpen(false);
+        } else if (event.key === 'Escape') {
+          if (!list.hidden) setOpen(false);
+          else input.value = '';
+        } else if (event.key === 'Tab') {
+          setOpen(false);
+        }
+      });
+    },
+    check(container) {
+      const input = container.querySelector('[role="combobox"]');
+      const list = container.querySelector('[role="listbox"]');
+      const press = (key) => input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      const problems = [];
+      if (input.getAttribute('aria-controls') !== list.id) problems.push('the combobox does not control its listbox');
+      if (input.getAttribute('aria-expanded') !== 'true') problems.push('the combobox is not expanded with suggestions');
+      if (!container.querySelector('[role="status"]')?.textContent.includes('results available')) problems.push('the suggestion count is not announced');
+      input.focus();
+      press('ArrowDown');
+      if (input.getAttribute('aria-activedescendant') !== 'combo-option-0') problems.push('ArrowDown does not activate the first option');
+      press('ArrowDown');
+      if (input.getAttribute('aria-activedescendant') !== 'combo-option-1' || document.getElementById('combo-option-1').getAttribute('aria-selected') !== 'true') problems.push('ArrowDown does not move the active option');
+      press('ArrowUp');
+      if (input.getAttribute('aria-activedescendant') !== 'combo-option-0') problems.push('ArrowUp does not move back');
+      press('Escape');
+      if (!list.hidden || input.getAttribute('aria-expanded') !== 'false' || input.hasAttribute('aria-activedescendant')) problems.push('Escape does not close the list first');
+      if (input.value !== 'dun') problems.push('the first Escape cleared the field');
+      press('Escape');
+      if (input.value !== '') problems.push('the second Escape does not clear the field');
+      input.value = 'dun';
+      press('ArrowDown');
+      press('ArrowDown');
+      press('Enter');
+      if (input.value !== 'Dune' || !list.hidden) problems.push('Enter does not choose the active option');
+      press('ArrowDown');
+      press('Tab');
+      if (!list.hidden || input.hasAttribute('aria-activedescendant')) problems.push('Tab does not leave the list');
+      // Leave the sample open so the capture shows the suggestions.
+      input.value = 'dun';
+      press('ArrowDown');
+      press('ArrowUp');
+      press('ArrowUp');
+      return [...problems, ...checkNoOverflow(container)];
+    },
+  };
+}
+
 function searchStateScenarios() {
   const note = (title, text) => {
     const list = el('div', 'listbox', '', { role: 'status' });
@@ -132,6 +239,7 @@ function searchStateScenarios() {
     return list;
   };
   return [
+    comboboxScenario(),
     {
       name: 'Search · empty',
       render(container) {
@@ -316,14 +424,15 @@ function panelScenarios() {
     {
       name: 'Panel · skeleton while loading',
       render(container) {
-        const stack = el('div', 'skeleton-stack');
-        stack.append(el('span', 'skeleton skeleton--line skeleton--short'), el('span', 'skeleton skeleton--row'));
+        const stack = el('div', 'skeleton-stack', '', { role: 'status', 'aria-label': 'Loading availability' });
+        stack.append(el('span', 'skeleton skeleton--line skeleton--short', '', { 'aria-hidden': 'true' }), el('span', 'skeleton skeleton--row', '', { 'aria-hidden': 'true' }));
         container.append(stack);
       },
       check(container) {
         const lines = container.querySelectorAll('.skeleton');
         if (lines.length < 2) return ['the loading sample does not render its placeholders'];
         const problems = checkSkeletonVisible(container);
+        if (!container.querySelector('[role="status"][aria-label]')) problems.push('the loading state is not announced');
         const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
         const animated = getComputedStyle(lines[0]).animationName !== 'none';
         if (reduced && animated) problems.push('the skeleton still pulses under reduced motion');
@@ -344,6 +453,15 @@ function renderServicePicker(container) {
   wrap.append(select, icon('chevron'));
   pick.append(el('label', '', 'Service', { for: id }), wrap);
   container.append(pick);
+}
+
+function confirmDialog() {
+  const dialog = el('div', 'dialog', '', { role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'dialog-title', 'aria-describedby': 'dialog-text' });
+  dialog.append(el('h3', '', 'Remove the saved key?', { id: 'dialog-title' }), el('p', 'muted', 'You will need to paste it again.', { id: 'dialog-text' }));
+  const row = el('div', 'btn-row');
+  row.append(el('button', 'btn btn--danger', 'Remove', { type: 'button' }), el('button', 'btn btn--secondary', 'Cancel', { type: 'button' }));
+  dialog.append(row);
+  return dialog;
 }
 
 function stateScenarios() {
@@ -498,12 +616,7 @@ function stateScenarios() {
     {
       name: 'Confirmation dialog',
       render(container) {
-        const dialog = el('div', 'dialog', '', { role: 'alertdialog', 'aria-labelledby': 'dialog-title' });
-        dialog.append(el('h3', '', 'Remove the saved key?', { id: 'dialog-title' }), el('p', 'muted', 'You will need to paste it again.'));
-        const row = el('div', 'btn-row');
-        row.append(el('button', 'btn btn--danger', 'Remove', { type: 'button' }), el('button', 'btn btn--secondary', 'Cancel', { type: 'button' }));
-        dialog.append(row);
-        container.append(dialog);
+        container.append(confirmDialog());
       },
       check(container) {
         const dialog = container.querySelector('.dialog');
@@ -511,6 +624,60 @@ function stateScenarios() {
         if (dialog.getBoundingClientRect().width > parseFloat(resolveToken('--dialog-max', 'width')) + 1) {
           problems.push('the dialog exceeds its width cap');
         }
+        if (dialog.getAttribute('aria-modal') !== 'true') problems.push('the dialog is not modal');
+        return problems;
+      },
+    },
+    {
+      name: 'Confirmation dialog · opened from a button',
+      render(container) {
+        const opener = el('button', 'btn btn--danger', 'Remove the saved key', { type: 'button' });
+        let scrim = null;
+        const close = () => {
+          scrim?.remove();
+          scrim = null;
+          opener.focus();
+        };
+        opener.addEventListener('click', () => {
+          scrim = el('div', 'scrim');
+          const dialog = confirmDialog();
+          const [remove, cancel] = dialog.querySelectorAll('button');
+          const buttons = [remove, cancel];
+          cancel.addEventListener('click', close);
+          remove.addEventListener('click', close);
+          dialog.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              close();
+            } else if (event.key === 'Tab') {
+              const index = buttons.indexOf(document.activeElement);
+              const next = (index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length;
+              event.preventDefault();
+              buttons[next].focus();
+            }
+          });
+          scrim.append(dialog);
+          container.append(scrim);
+          cancel.focus();
+        });
+        container.append(opener);
+      },
+      check(container) {
+        const problems = [];
+        const opener = container.querySelector('.btn--danger');
+        opener.focus();
+        opener.click();
+        const dialog = container.querySelector('[role="alertdialog"]');
+        if (!dialog) return ['the dialog does not open'];
+        if (document.activeElement?.textContent !== 'Cancel') problems.push('focus does not start on Cancel');
+        const press = (key, extra = {}) => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra }));
+        press('Tab');
+        if (document.activeElement?.textContent !== 'Remove') problems.push('Tab leaves the dialog');
+        press('Tab');
+        if (document.activeElement?.textContent !== 'Cancel') problems.push('Tab does not wrap inside the dialog');
+        press('Escape');
+        if (container.querySelector('[role="alertdialog"]')) problems.push('Escape does not close the dialog');
+        if (document.activeElement !== opener) problems.push('focus does not return to the opener');
         return problems;
       },
     },

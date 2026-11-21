@@ -128,6 +128,7 @@
   --press-scale: 0.97;
   --reveal-shift: 0.25rem; /* 4px rise of the result on reveal */
   --pulse-opacity: 0.5;    /* lowest opacity of the skeleton pulse */
+  --disabled-opacity: 0.5; /* disabled buttons (disabled fields use a dashed frame instead) */
 
   /* ---- Layers ---- */
   --z-sticky: 10;

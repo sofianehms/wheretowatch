@@ -113,7 +113,7 @@ export function checkDisabledControl(control) {
   if (!control.disabled) return ['the control is not disabled'];
   const read = () => {
     const style = getComputedStyle(control);
-    return `${style.color}|${style.backgroundColor}|${style.borderTopStyle}|${style.cursor}`;
+    return `${style.color}|${style.backgroundColor}|${style.borderTopStyle}|${style.cursor}|${style.opacity}`;
   };
   const disabledLook = read();
   if (getComputedStyle(control).cursor !== 'not-allowed') problems.push('the disabled control does not show the blocked cursor');

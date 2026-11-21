@@ -38,7 +38,13 @@ const searchError = {
   check(container) {
     const problems = checkNoOverflow(container);
     const retry = container.querySelector('.listbox button');
-    if (!retry || !/try again/i.test(retry.textContent)) problems.push('the search error has no retry action');
+    if (!retry || !/try again/i.test(retry.textContent) || !retry.checkVisibility({ opacityProperty: true, visibilityProperty: true })) problems.push('the search error has no visible retry action');
+    else {
+      let activated = 0;
+      retry.addEventListener('click', () => { activated += 1; });
+      retry.click();
+      if (activated !== 1 || retry.disabled) problems.push('the retry action cannot be activated');
+    }
     if (!container.querySelector('.listbox[role="alert"]')) problems.push('the search error is not announced as an alert');
     return problems;
   },
@@ -143,7 +149,8 @@ const installPrompt = {
   },
   check(container) {
     const problems = checkNoOverflow(container);
-    if (!container.querySelector('button[aria-label="Dismiss"]')) problems.push('the install prompt cannot be dismissed');
+    const dismiss = container.querySelector('button[aria-label="Dismiss"]');
+    if (!dismiss?.checkVisibility({ opacityProperty: true, visibilityProperty: true })) problems.push('the install prompt cannot be dismissed');
     if (container.querySelectorAll('ol > li').length !== 3) problems.push('the install prompt does not list three steps');
     return problems;
   },
