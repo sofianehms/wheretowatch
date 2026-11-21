@@ -11,6 +11,7 @@
   --color-surface: #1f1f1f;         /* rows, cards, inputs */
   --color-surface-raised: #2a2a2a;  /* popover, active option, chips */
   --color-surface-hover: #333333;   /* pointer hover on rows (not used for state) */
+  --color-skeleton: #444444;        /* loading placeholders: visible on bg, surface and raised */
   --color-text: #f2f2f2;            /* body text: 16.46 on bg, 14.72 on surface, 12.82 on raised */
   --color-text-strong: #ffffff;     /* titles and verdicts: 18.42 on bg */
   --color-text-muted: #a3a3a3;      /* metadata: 7.30 on bg, 6.53 on surface, 5.69 on raised, 5.01 on hover */
@@ -141,6 +142,7 @@
   --color-surface: #f3f3f3;
   --color-surface-raised: #ffffff;
   --color-surface-hover: #ebebeb;
+  --color-skeleton: #d4d4d4;
   --color-text: #141414;            /* 18.42 on bg, 16.60 on surface, 15.45 on hover */
   --color-text-strong: #000000;
   --color-text-muted: #595959;      /* 7.00 on bg, 6.31 on surface, 5.88 on hover */
@@ -170,6 +172,7 @@
     --color-surface: #f3f3f3;
     --color-surface-raised: #ffffff;
     --color-surface-hover: #ebebeb;
+    --color-skeleton: #d4d4d4;
     --color-text: #141414;
     --color-text-strong: #000000;
     --color-text-muted: #595959;

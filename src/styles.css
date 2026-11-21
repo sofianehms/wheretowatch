@@ -91,9 +91,10 @@ h1 { font-size: var(--text-xl); }
 .btn--danger:hover { background: var(--color-surface-hover); }
 .icon-btn {
   display: inline-grid; place-items: center; width: var(--tap-size); height: var(--tap-size);
-  padding: 0; border: 0; border-radius: var(--radius-round); background: transparent; color: var(--color-text); cursor: pointer;
+  flex: none; padding: 0; border: 0; border-radius: var(--radius-round); background: transparent; color: var(--color-text); cursor: pointer;
 }
 .icon-btn:hover { background: var(--color-surface-hover); }
+.icon-btn:disabled { background: transparent; color: var(--color-text-muted); cursor: not-allowed; }
 .link { color: var(--color-text); font-weight: var(--weight-medium); text-decoration: underline;
   display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--tap-size); }
 .link--quiet { color: var(--color-text-muted); }
@@ -117,7 +118,7 @@ p .link, li .link--inline { display: inline; min-height: 0; } /* links inside a 
 .poster.poster--card { width: var(--poster-card); font-size: var(--text-xl); }
 
 /* ---------- Skeleton (loading) ---------- */
-.skeleton { background: var(--color-surface-raised); border-radius: var(--radius-sm);
+.skeleton { background: var(--color-skeleton); border-radius: var(--radius-sm);
   animation: pulse var(--duration-pulse) linear infinite alternate; }
 .skeleton--line { display: block; height: var(--space-4); }
 .skeleton--short { width: var(--skeleton-short); }
@@ -135,7 +136,7 @@ p .link, li .link--inline { display: inline; min-height: 0; } /* links inside a 
 .dialog { width: 100%; max-width: var(--dialog-max); display: grid; gap: var(--space-4); padding: var(--space-6);
   background: var(--color-surface-raised); border-radius: var(--radius-lg); box-shadow: var(--shadow-md);
   animation: reveal var(--duration-base) var(--ease-out) both; }
-.dialog h2 { font-size: var(--text-lg); color: var(--color-text-strong); }
+.dialog h2, .dialog h3 { font-size: var(--text-lg); color: var(--color-text-strong); }
 
 /* ---------- Fields and controls ---------- */
 .field { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
@@ -147,6 +148,7 @@ p .link, li .link--inline { display: inline; min-height: 0; } /* links inside a 
 .input-row:focus-within { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
 .input-row input { flex: 1; min-width: 0; min-height: var(--tap-size-lg); border: 0; background: transparent; font-size: var(--text-base); color: var(--color-text-strong); font-family: var(--font-sans); letter-spacing: var(--tracking-field); }
 .input-row input:focus { outline: none; }
+.input-row input:disabled { cursor: not-allowed; }
 /* Disabled key field: dashed frame on the page color, like the disabled search field. */
 .input-row:has(input:disabled) { background: var(--color-bg); border-style: dashed; }
 .input-row input::placeholder { color: var(--color-text-muted); opacity: 1; letter-spacing: 0; }
