@@ -1,0 +1,7 @@
+/* Compact site footer. */
+/* ---------- Compact site footer (one or two lines) ---------- */
+.site-footer { margin-top: auto; padding-top: var(--space-12); font-size: var(--text-xs); color: var(--color-text-muted); }
+.site-footer p { padding-top: var(--space-3); border-top: var(--border-width) solid var(--color-border); }
+.site-footer .link { font-size: var(--text-xs); color: var(--color-text-muted); }
+.site-footer .link--about { display: inline-flex; min-height: var(--tap-size); font-size: var(--text-sm); }
+

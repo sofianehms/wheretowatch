@@ -1,0 +1,68 @@
+/* Search: combobox, suggestions, recent titles. */
+/* ---------- Search (ARIA 1.2 combobox) ---------- */
+.search { position: relative; }
+.search__field {
+  display: flex; align-items: center; gap: var(--space-2); min-width: 0;
+  min-height: var(--tap-size-lg); padding: 0 var(--space-1) 0 var(--space-3);
+  background: var(--color-surface); border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+}
+.search__field:focus-within { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
+.search__field > .icon { color: var(--color-text-muted); }
+.search__input {
+  flex: 1; min-width: 0; min-height: var(--tap-size); padding: 0;
+  border: 0; background: transparent; font-size: var(--text-base); color: var(--color-text-strong);
+}
+.search__input:focus { outline: none; }
+.search__input::placeholder { color: var(--color-text-muted); opacity: 1; }
+.search__input::-webkit-search-cancel-button { display: none; }
+/* Disabled (offline): the state shows on the frame only; the reason text keeps full contrast. */
+.search__field--disabled { background: var(--color-bg); border-style: dashed; }
+.search-form { display: flex; gap: var(--space-2); }
+.search-form .search__field { flex: 1; }
+.search-form .btn { flex: none; }
+.listbox {
+  margin-top: var(--space-2); padding: var(--space-1) 0;
+  background: var(--color-surface-raised); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md); max-height: var(--popover-max-h); overflow-y: auto;
+}
+.option {
+  display: grid; grid-template-columns: var(--poster-thumb) minmax(0, 1fr); align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-3); cursor: pointer;
+}
+.option:hover { background: var(--color-surface-hover); }
+/* Active option: the 4px marker carries the state (>= 3:1 on the active row in both themes). */
+.option[aria-selected="true"] { background: var(--color-surface-hover); box-shadow: inset var(--space-1) 0 0 var(--color-indicator); }
+.option__title { display: block; font-weight: var(--weight-bold); color: var(--color-text-strong); overflow-wrap: anywhere; }
+.option__title mark { background: none; color: inherit; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 0.2em; }
+.option__meta { display: block; font-size: var(--text-sm); color: var(--color-text-muted); }
+.option__lines { display: grid; gap: var(--space-2); }
+.listbox__note { padding: var(--space-3) var(--space-4); font-size: var(--text-sm); color: var(--color-text-muted); }
+.listbox__note strong { color: var(--color-text-strong); }
+.listbox__note .btn { margin-top: var(--space-3); }
+.search-hint { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--color-text-muted); }
+
+/* ---------- Recently viewed row (the one rail borrowed from streaming apps) ---------- */
+.recent-rail { margin-top: var(--space-8); }
+.rail { display: grid; grid-template-columns: repeat(4, minmax(0, var(--poster-rail))); gap: var(--space-3); margin-top: var(--space-3); }
+.rail a { display: grid; gap: var(--space-2); text-decoration: none; font-size: var(--text-xs); color: var(--color-text-muted); }
+.rail a:hover .poster { box-shadow: 0 0 0 var(--focus-width) var(--color-border-strong); }
+
+/* ---------- Recent list ---------- */
+.recent { display: grid; gap: var(--space-1); margin-top: var(--space-2); }
+.recent a { display: grid; grid-template-columns: var(--poster-thumb) minmax(0, 1fr); gap: var(--space-3); align-items: center;
+  padding: var(--space-2) var(--space-3); background: var(--color-surface); border-radius: var(--radius-md); text-decoration: none; }
+.section-title { font-size: var(--text-md); font-weight: var(--weight-bold); color: var(--color-text-strong); }
+.source-line { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--color-text-muted); }
+
+
+/* Placeholder search form of the shell page. */
+.search > input {
+  width: 100%; min-height: var(--tap-size); padding: 0 var(--space-4); font: inherit; color: inherit;
+  background: var(--color-surface); border: var(--border-width) solid var(--color-border-strong); border-radius: var(--radius-md);
+}
+.results { list-style: none; margin: var(--space-4) 0 0; padding: 0; }
+
+@media (min-width: 48rem) {
+  .listbox { position: absolute; left: 0; right: 0; top: 100%; z-index: var(--z-popover); }
+}

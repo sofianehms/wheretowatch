@@ -1,0 +1,8 @@
+/* Simulated pointer states for the states page: a real :hover cannot be forced from a script,
+   so each rule repeats the production hover declaration under an .is-hover class. */
+.btn--primary.is-hover { background: var(--color-accent-hover); }
+.btn--secondary.is-hover, .btn--ghost.is-hover, .icon-btn.is-hover { background: var(--color-surface-hover); }
+.btn--danger.is-hover { background: var(--color-surface-hover); }
+.option.is-hover, .country__toggle.is-hover { background: var(--color-surface-hover); }
+.scenario-note { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--color-text-muted); }
+.scenario-grid { display: grid; gap: var(--space-3); }
