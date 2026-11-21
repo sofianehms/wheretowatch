@@ -1,67 +1,187 @@
-/* Design tokens: the single source of truth for every visual value.
-   Replace the placeholder values with the ones validated in the design brief. */
+/* Design tokens: the single source of truth for every visual value (design brief v2).
+   Structure (ADR-016): the dark theme is the default on :root, whatever the device setting.
+   [data-theme="light"] selects the light theme; [data-theme="auto"] follows prefers-color-scheme.
+   Contrast ratios are WCAG 2.x values measured for each pair named in the comment
+   (bg = --color-bg, surface = --color-surface, raised = --color-surface-raised). */
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
-  /* Color (light) */
-  --color-bg: #ffffff;
-  --color-surface: #f4f5f7;
-  --color-text: #14161a;
-  --color-text-muted: #4a5160;
-  --color-border: #d9dce2;
-  --color-accent: #1f4fd8;
-  --color-accent-text: #ffffff;
-  --color-danger: #b42318;
-  --color-focus: #1f4fd8;
+  /* ---- Color: dark theme (default) ---- */
+  --color-bg: #141414;              /* page background: deep charcoal, softer than pure black on OLED */
+  --color-surface: #1f1f1f;         /* rows, cards, inputs */
+  --color-surface-raised: #2a2a2a;  /* popover, active option, chips */
+  --color-surface-hover: #333333;   /* pointer hover on rows (not used for state) */
+  --color-text: #f2f2f2;            /* body text: 16.46 on bg, 14.72 on surface, 12.82 on raised */
+  --color-text-strong: #ffffff;     /* titles and verdicts: 18.42 on bg */
+  --color-text-muted: #a3a3a3;      /* metadata: 7.30 on bg, 6.53 on surface, 5.69 on raised, 5.01 on hover */
+  --color-border: #333333;          /* decorative dividers only (not a component boundary) */
+  --color-border-strong: #8c8c8c;   /* input and control outlines: 5.48 on bg, 4.90 on surface (>= 3:1) */
+  --color-accent: #cc3a24;          /* the single red, warm (hue 7.9, about 11 degrees from the usual streaming-brand red):
+                                       filled buttons and the mark only; 3.68 on bg, 3.30 on surface as a UI shape */
+  --color-accent-hover: #b8331f;    /* hovered filled button: white text 5.95 */
+  --color-accent-pressed: #a82e1d;  /* pressed filled button: white text 6.83 */
+  --color-accent-text: #ffffff;     /* text on the red: 5.00 on accent */
+  --color-accent-tint: #ff7b63;     /* red text or icon on dark when unavoidable: 7.25 on bg, 6.49 on surface, 5.65 on raised, 4.97 on hover */
+  --color-indicator: #ff7b63;       /* active-option marker: 4.97 on the active row (hover), >= 3:1 */
+  --color-positive: #4cd97b;        /* "available" icon and label: 10.10 on bg, 9.04 on surface */
+  --color-caution: #f5b841;         /* "sources disagree", quota warning: 10.36 on bg, 9.27 on surface */
+  --color-danger: #ff7b63;          /* errors and destructive actions: 7.25 on bg, 5.65 on raised */
+  --color-focus: #ffffff;           /* focus ring: 18.42 on bg */
+  --color-scrim: rgb(0 0 0 / 0.6);  /* behind dialogs */
+  --color-hero-fade: rgb(20 20 20 / 0); /* transparent end of the hero fade (bg at 0 alpha) */
+  --hero-opacity: 0.55;             /* poster tones behind the title head; muted text stays >= 4.5 on the mix */
 
-  /* Type */
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --text-sm: 0.875rem;
-  --text-base: 1rem;
-  --text-lg: 1.25rem;
-  --text-xl: 1.75rem;
+  /* Poster placeholders: identical in both themes, like real artwork.
+     Initials (--poster-ink) measure 6.38 to 12.51 across all stops. */
+  --poster-ink: #e6e6e6;
+  --poster-1-from: #4a4a4a; --poster-1-to: #262626; /* graphite */
+  --poster-2-from: #5a4f45; --poster-2-to: #2b2622; /* warm grey */
+  --poster-3-from: #3f4a55; --poster-3-to: #20262c; /* slate */
+  --poster-4-from: #4d4553; --poster-4-to: #26222a; /* muted plum */
+  --poster-5-from: #3f4f48; --poster-5-to: #212925; /* muted teal */
+  --poster-6-from: #554848; --poster-6-to: #2a2323; /* muted brick */
+
+  /* ---- Type ---- */
+  /* System stack: SF Pro on iPhone, Segoe UI on Windows, Roboto on Android; zero download, no render blocking. */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --text-xs: 0.8125rem;  /* 13px: badges, fine print (never below) */
+  --text-sm: 0.875rem;   /* 14px: metadata, helper text */
+  --text-base: 1rem;     /* 16px: body, inputs (prevents iOS focus zoom) */
+  --text-md: 1.125rem;   /* 18px: section headings, wordmark */
+  --text-lg: 1.375rem;   /* 22px: verdict on mobile */
+  --text-xl: 1.75rem;    /* 28px: title name on mobile */
+  --text-2xl: 2.25rem;   /* 36px: title name on desktop */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-bold: 700;
+  --weight-heavy: 800;   /* wordmark only */
   --leading: 1.5;
+  --leading-tight: 1.2;
+  --tracking-tight: -0.01em; /* large titles */
 
-  /* Space (4px grid) */
+  /* ---- Space (4px grid) ---- */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
+  --space-5: 1.25rem;
   --space-6: 1.5rem;
   --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
 
-  /* Shape and depth */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.75rem;
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.08);
-  --shadow-md: 0 4px 16px rgb(0 0 0 / 0.12);
-  --tap-size: 2.75rem;
+  /* ---- Layout ---- */
+  --content-max: 40rem;  /* single column on phone and tablet */
+  --layout-max: 72rem;   /* desktop frame */
+  --aside-width: 20rem;  /* desktop result: poster and verdict column */
+  --popover-max-h: 28rem;
 
-  /* Motion */
+  /* ---- Shape and depth ---- */
+  --radius-sm: 0.25rem;  /* 4px: buttons, inputs, posters (streaming-app squareness) */
+  --radius-md: 0.375rem; /* 6px: cards, rows */
+  --radius-lg: 0.5rem;   /* 8px: popover, dialog */
+  --radius-round: 50%;   /* icon-only round buttons */
+  --border-width: 1px;
+  --focus-width: 2px;
+  --focus-offset: 2px;
+  --shadow-sm: none;                               /* depth on dark comes from surface lightness */
+  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.6);        /* popover and dialog only */
+
+  /* ---- Sizes ---- */
+  --tap-size: 2.75rem;     /* 44px minimum target */
+  --tap-size-lg: 3rem;     /* 48px: search field, primary buttons */
+  --icon-sm: 1rem;
+  --icon-md: 1.25rem;
+  --icon-lg: 1.5rem;
+  --poster-thumb: 3rem;    /* 48 x 72 px suggestion thumbnail (TMDB w92 / w154) */
+  --poster-rail: 4.5rem;   /* 72 x 108 px recently viewed posters (w154) */
+  --poster-card: 5rem;     /* 80 x 120 px result poster on phone (w185) */
+  --poster-hero: 12rem;    /* 192 x 288 px result poster on desktop (w342) */
+  --mark-size: 1.5rem;     /* product mark in the header */
+
+  /* ---- Motion ---- */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --duration-fast: 120ms;
-  --duration-base: 200ms;
+  --duration-press: 120ms; /* button press feedback */
+  --duration-fast: 150ms;  /* disclosure content fade */
+  --duration-base: 200ms;  /* result reveal, dialog */
+  --duration-pulse: 1200ms;/* skeleton pulse (constant, linear) */
+  --press-scale: 0.97;
+  --reveal-shift: 0.25rem; /* 4px rise of the result on reveal */
+
+  /* ---- Layers ---- */
+  --z-sticky: 10;
+  --z-popover: 20;
+  --z-dialog: 30;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #0e1013;
-    --color-surface: #181b20;
-    --color-text: #eef0f3;
-    --color-text-muted: #aab1bd;
-    --color-border: #2c313a;
-    --color-accent: #7c9cff;
-    --color-accent-text: #0e1013;
-    --color-danger: #ff8a80;
-    --color-focus: #7c9cff;
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
-    --shadow-md: 0 4px 16px rgb(0 0 0 / 0.6);
+/* ---- Color: light theme ---- */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #ffffff;
+  --color-surface: #f3f3f3;
+  --color-surface-raised: #ffffff;
+  --color-surface-hover: #ebebeb;
+  --color-text: #141414;            /* 18.42 on bg, 16.60 on surface, 15.45 on hover */
+  --color-text-strong: #000000;
+  --color-text-muted: #595959;      /* 7.00 on bg, 6.31 on surface, 5.88 on hover */
+  --color-border: #e0e0e0;
+  --color-border-strong: #767676;   /* control outlines: 4.54 on bg, 4.09 on surface (>= 3:1) */
+  --color-accent: #cc3a24;          /* same red; 5.00 on bg, 4.51 on surface as a UI shape */
+  --color-accent-hover: #b8331f;
+  --color-accent-pressed: #a82e1d;
+  --color-accent-text: #ffffff;     /* 5.00 on accent */
+  --color-accent-tint: #b02a1a;     /* red text on light: 6.58 on bg, 5.93 on surface, 5.52 on hover */
+  --color-indicator: #cc3a24;       /* active-option marker: 4.20 on the active row */
+  --color-positive: #18742f;        /* 5.87 on bg, 5.29 on surface, 4.92 on hover */
+  --color-caution: #7a5000;         /* 7.06 on bg, 6.36 on surface, 5.92 on hover */
+  --color-danger: #b02a1a;          /* 6.58 on bg */
+  --color-focus: #141414;           /* 18.42 on bg */
+  --color-scrim: rgb(0 0 0 / 0.4);
+  --color-hero-fade: rgb(255 255 255 / 0);
+  --hero-opacity: 0;                /* light: no backdrop (a grey wash looked dull) */
+  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.14);
+}
+
+/* Auto: same light values when the device asks for light; dark otherwise. */
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] {
+    color-scheme: light;
+    --color-bg: #ffffff;
+    --color-surface: #f3f3f3;
+    --color-surface-raised: #ffffff;
+    --color-surface-hover: #ebebeb;
+    --color-text: #141414;
+    --color-text-strong: #000000;
+    --color-text-muted: #595959;
+    --color-border: #e0e0e0;
+    --color-border-strong: #767676;
+    --color-accent: #cc3a24;
+    --color-accent-hover: #b8331f;
+    --color-accent-pressed: #a82e1d;
+    --color-accent-text: #ffffff;
+    --color-accent-tint: #b02a1a;
+    --color-indicator: #cc3a24;
+    --color-positive: #18742f;
+    --color-caution: #7a5000;
+    --color-danger: #b02a1a;
+    --color-focus: #141414;
+    --color-scrim: rgb(0 0 0 / 0.4);
+    --color-hero-fade: rgb(255 255 255 / 0);
+    --hero-opacity: 0;
+    --shadow-md: 0 8px 24px rgb(0 0 0 / 0.14);
   }
 }
 
+/* Reduced motion: no movement (no shift, no scale); short opacity fades remain as the
+   alternative cue; the skeleton stops pulsing and stays static. */
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --duration-fast: 0ms;
-    --duration-base: 0ms;
+    --duration-press: 0ms;
+    --duration-fast: 100ms;
+    --duration-base: 100ms;
+    --duration-pulse: 0ms;
+    --press-scale: 1;
+    --reveal-shift: 0;
   }
 }

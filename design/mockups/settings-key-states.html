@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Settings, key and usage states · wheretowatch mockup</title>
+<meta name="description" content="State sheet: edited (Save becomes primary), testing, valid, rejected, network error; usage normal, warning, blocked.">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="mockups.css">
+<script src="mockups.js"></script>
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" focusable="false"><symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></symbol><symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol><symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol><symbol id="i-chevDown" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol><symbol id="i-chevLeft" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol><symbol id="i-checkCircle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.5 2.5L16 9.5"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol><symbol id="i-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/></symbol><symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.5 21.5 20h-19z"/><path d="M12 10v4M12 17.2v.1"/></symbol><symbol id="i-slash" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></symbol><symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5v.4M12 17v.1"/></symbol><symbol id="i-wifiOff" viewBox="0 0 24 24"><path d="m3 3 18 18M8.5 16.4a5 5 0 0 1 7 0M5 12.6a10 10 0 0 1 4.6-2.6M19 12.6a10 10 0 0 0-2.3-1.7M2 8.8a15 15 0 0 1 3.8-2.4M22 8.8A15 15 0 0 0 11 5.1M12 20v.1"/></symbol><symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol><symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.1"/></symbol><symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-5"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></symbol><symbol id="i-share" viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4M5 12v8h14v-8"/></symbol><symbol id="i-plusSquare" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></symbol><symbol id="i-toggle" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="17" cy="12" r="3"/></symbol></svg>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="page">
+<header class="app-header">
+  <div class="subpage-head"><a class="icon-btn" href="settings.html" aria-label="Back to settings"><svg class="icon " aria-hidden="true" focusable="false"><use href="#i-chevLeft"/></svg></a><h1>Key and usage states</h1></div>
+</header>
+<main id="main" class="column">
+  <div class="state-sheet settings">
+    <div><h2 class="state-sheet__label">Edited, not saved</h2>
+      <div class="field">
+        <label class="field__label" for="t0">TMDB key <small>Required</small></label>
+        <div class="input-row"><input id="t0" type="password" value="eyJhbGciOiJIUzI1NiJ9.example" autocomplete="off" spellcheck="false" aria-describedby="t0-state"><button class="btn btn--ghost" type="button" aria-pressed="false">Show</button></div>
+        <p class="key-state key-state--edit" id="t0-state"><svg class="icon icon--sm" aria-hidden="true" focusable="false"><use href="#i-info"/></svg>Not saved yet</p>
+        <div class="btn-row"><button class="btn btn--secondary" type="button">Test</button><button class="btn btn--primary" type="button">Save</button></div>
+      </div></div><div><h2 class="state-sheet__label">Testing</h2>
+      <div class="field">
+        <label class="field__label" for="t1">TMDB key <small>Required</small></label>
+        <div class="input-row"><input id="t1" type="password" value="eyJhbGciOiJIUzI1NiJ9.example" autocomplete="off" spellcheck="false" aria-describedby="t1-state"><button class="btn btn--ghost" type="button" aria-pressed="false">Show</button></div>
+        <p class="key-state key-state--busy" id="t1-state" role="status"><svg class="icon icon--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"/></svg>Testing…</p>
+        <div class="btn-row"><button class="btn btn--secondary" type="button">Test</button><button class="btn btn--secondary" type="button">Save</button></div>
+      </div></div><div><h2 class="state-sheet__label">Valid</h2>
+      <div class="field">
+        <label class="field__label" for="t2">TMDB key <small>Required</small></label>
+        <div class="input-row"><input id="t2" type="text" value="eyJhbGciOiJIUzI1NiJ9.example" autocomplete="off" spellcheck="false" aria-describedby="t2-state"><button class="btn btn--ghost" type="button" aria-pressed="true">Hide</button></div>
+        <p class="key-state key-state--ok" id="t2-state" role="status"><svg class="icon icon--sm" aria-hidden="true" focusable="false"><use href="#i-checkCircle"/></svg>Key works. Save it to use it.</p>
+        <div class="btn-row"><button class="btn btn--secondary" type="button">Test</button><button class="btn btn--primary" type="button">Save</button></div>
+      </div></div><div><h2 class="state-sheet__label">Rejected</h2>
+      <div class="field">
+        <label class="field__label" for="t3">TMDB key <small>Required</small></label>
+        <div class="input-row"><input id="t3" type="password" value="eyJhbGciOiJIUzI1NiJ9.example" autocomplete="off" spellcheck="false" aria-describedby="t3-state"><button class="btn btn--ghost" type="button" aria-pressed="false">Show</button></div>
+        <p class="key-state key-state--bad" id="t3-state" role="status"><svg class="icon icon--sm" aria-hidden="true" focusable="false"><use href="#i-alert"/></svg>TMDB rejected this key. Check that you copied the API Read Access Token.</p>
+        <div class="btn-row"><button class="btn btn--secondary" type="button">Test</button><button class="btn btn--secondary" type="button">Save</button></div>
+      </div></div><div><h2 class="state-sheet__label">Network</h2>
+      <div class="field">
+        <label class="field__label" for="t4">TMDB key <small>Required</small></label>
+        <div class="input-row"><input id="t4" type="password" value="eyJhbGciOiJIUzI1NiJ9.example" autocomplete="off" spellcheck="false" aria-describedby="t4-state"><button class="btn btn--ghost" type="button" aria-pressed="false">Show</button></div>
+        <p class="key-state key-state--bad" id="t4-state" role="status"><svg class="icon icon--sm" aria-hidden="true" focusable="false"><use href="#i-alert"/></svg>Couldn’t reach TMDB. Check your connection and test again.</p>
+        <div class="btn-row"><button class="btn btn--secondary" type="button">Test</button><button class="btn btn--secondary" type="button">Save</button></div>
+      </div></div>
+    <div><h2 class="state-sheet__label">Usage normal</h2>
+      <div class="usage">
+        <h3>Monthly calls for language data</h3>
+        <div class="meter ">
+          <span><strong>312 of 1,000</strong> <span class="muted">calls used · resets on 1 Dec 2026</span></span>
+          <div class="meter__bar" aria-hidden="true"><div class="meter__fill" data-fill="31.2"></div></div>
+        </div>
+        <p class="field__help">Free plan of the second source: 1,000 calls a month. Only opening a title uses one.</p>
+      </div></div><div><h2 class="state-sheet__label">Usage warning (80 %)</h2>
+      <div class="usage">
+        <h3>Monthly calls for language data</h3>
+        <div class="meter meter--caution">
+          <span><strong>812 of 1,000</strong> <span class="muted">getting close: languages stop at 1,000 · resets on 1 Dec 2026</span></span>
+          <div class="meter__bar" aria-hidden="true"><div class="meter__fill" data-fill="81.2"></div></div>
+        </div>
+        <p class="field__help">Free plan of the second source: 1,000 calls a month. Only opening a title uses one.</p>
+      </div></div><div><h2 class="state-sheet__label">Usage blocked (100 %)</h2>
+      <div class="usage">
+        <h3>Monthly calls for language data</h3>
+        <div class="meter meter--caution">
+          <span><strong>1,000 of 1,000</strong> <span class="muted">limit reached: languages paused until 1 Dec 2026</span></span>
+          <div class="meter__bar" aria-hidden="true"><div class="meter__fill" data-fill="100"></div></div>
+        </div>
+        <p class="field__help">Free plan of the second source: 1,000 calls a month. Only opening a title uses one.</p>
+      </div></div>
+  </div>
+</main>
+</div>
+</body>
+</html>
