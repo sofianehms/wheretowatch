@@ -13,10 +13,15 @@ const MIME = {
   '.woff2': 'font/woff2',
 };
 
-export function startServer(root, port = 0) {
+export function startServer(root, port = 0, { prefix = '' } = {}) {
   const base = path.resolve(root);
   const server = http.createServer((req, res) => {
     let pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    if (prefix && !pathname.startsWith(prefix + '/')) {
+      res.writeHead(404).end('Not found');
+      return;
+    }
+    pathname = pathname.slice(prefix.length);
     if (pathname.endsWith('/')) pathname += 'index.html';
     const file = path.resolve(base, '.' + pathname);
     const hidden = /(^|[\\/])(\.|node_modules|scripts|package)/.test(path.relative(base, file));
@@ -37,5 +42,6 @@ export function startServer(root, port = 0) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT) || 8080;
-  startServer('.', port).then(() => console.log(`http://127.0.0.1:${port}/`));
+  const prefix = process.env.PATH_PREFIX || '';
+  startServer('.', port, { prefix }).then(() => console.log(`http://127.0.0.1:${port}${prefix}/`));
 }
