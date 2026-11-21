@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { HttpError, isQuotaExhausted, request } from '../src/api/http.js';
+import saRateLimit from './fixtures/sa/error-429.js';
+import saQuota from './fixtures/sa/quota-exhausted.js';
+import tmdbRateLimit from './fixtures/tmdb/error-429.js';
 
 const dummyKey = 'fake-key-for-tests';
 const url = `https://example.test/catalog?filter=${dummyKey}#fragment`;
@@ -104,6 +107,21 @@ const quotaFixtures = [
   [403, {}, { message: 'Your monthly quota has been exceeded' }, false],
   [429, {}, null, false],
 ];
+
+for (const [name, body, retryOn429, type, calls] of [
+  ['Streaming Availability quota', saQuota, true, 'quota', 1],
+  ['Streaming Availability rate limit', saRateLimit, false, 'rateLimited', 1],
+  ['TMDB rate limit', tmdbRateLimit, true, 'rateLimited', 2],
+]) {
+  test(`classifies the checked-in ${name} fixture`, async (t) => {
+    const fetchImpl = t.mock.fn(async () => response(429, body));
+    const sleep = t.mock.fn(async () => {});
+    assert.equal(isQuotaExhausted(429, new Headers(), body), type === 'quota');
+    await assert.rejects(request(url, { retryOn429, fetchImpl, sleep }), expectError(type, 429));
+    assert.equal(fetchImpl.mock.callCount(), calls);
+    assert.equal(sleep.mock.callCount(), calls - 1);
+  });
+}
 
 test('distinguishes quota fixtures from ordinary rate limiting', async () => {
   for (const [status, fields, body, exhausted] of quotaFixtures) {

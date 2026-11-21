@@ -29,11 +29,11 @@ export class HttpError extends Error {
 }
 
 export function isQuotaExhausted(status, _headers, body) {
-  // The direct plan suspends access until the next billing cycle. Match a
-  // complete monthly exhaustion statement pending response validation in AL-1.
+  // Match complete quota messages pending live response validation in AL-1.
   const message = typeof body === 'string' ? body : body?.message;
   return status === 429 && typeof message === 'string' &&
-    /^Your monthly quota has been exceeded\.?$/i.test(message.trim());
+    /^(?:Your monthly quota has been exceeded|Request quota exhausted for this billing cycle)\.?$/i
+      .test(message.trim());
 }
 
 function retryDelay(headers) {
