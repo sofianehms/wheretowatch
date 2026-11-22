@@ -1,6 +1,7 @@
 // Quality gate for a static site: screenshots, no horizontal scroll, axe-core, Lighthouse, console errors.
 // Usage: npm run verify        Env: SHOTS_DIR (default .verify/shots), CHROME_PATH (default: auto-detect).
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 import AxeBuilder from '@axe-core/playwright';
@@ -24,6 +25,9 @@ function findChrome() {
   return found;
 }
 const chromePath = findChrome();
+// Chrome gets a throwaway config/cache home: verify never reads or writes the real browser profile.
+const chromeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-chrome-'));
+const chromeEnv = { XDG_CONFIG_HOME: chromeHome, XDG_CACHE_HOME: chromeHome };
 const sandboxArgs = (typeof process.getuid === 'function' && process.getuid() === 0) || process.env.CI ? ['--no-sandbox'] : [];
 
 const failures = [];
@@ -40,7 +44,7 @@ const allowedOrigins = new Set([
   'https://image.tmdb.org',
   'https://api.movieofthenight.com',
 ]);
-const browser = await chromium.launch({ executablePath: chromePath, args: sandboxArgs });
+const browser = await chromium.launch({ executablePath: chromePath, args: sandboxArgs, env: { ...process.env, ...chromeEnv } });
 
 function checkOrigin(url, report) {
   const requestOrigin = new URL(url).origin;
@@ -223,7 +227,7 @@ try {
   await checkTextZoom('/');
   await checkTextZoom(pages.find((page) => isStatesPage(page.path)).path);
 
-  const chrome = await chromeLauncher.launch({ chromePath, chromeFlags: ['--headless=new', '--disable-gpu', ...sandboxArgs] });
+  const chrome = await chromeLauncher.launch({ chromePath, envVars: chromeEnv, chromeFlags: ['--headless=new', '--disable-gpu', ...sandboxArgs] });
   try {
     for (const { path: route } of pages.filter((p) => p.lighthouse)) {
       const run = await lighthouse(origin + route, { port: chrome.port, output: 'json', logLevel: 'error',
@@ -243,6 +247,7 @@ try {
 } finally {
   await browser.close();
   server.close();
+  fs.rmSync(chromeHome, { recursive: true, force: true });
   console.log(`Total duration: ${((performance.now() - startedAt) / 1000).toFixed(1)}s`);
 }
 
