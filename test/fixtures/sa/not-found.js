@@ -1,7 +1,13 @@
 // Format: Streaming Availability API v4, https://developers.movieofthenight.com/
-// Reference date: 2026-11-21. This fixture is hand-written, not a recorded response.
+// Reference date: 22/11/2026. This fixture is hand-written, not a recorded response.
+import { lantern } from './countries.js';
+import { responseHeaders } from './response-headers.js';
+
+export const headers = responseHeaders(26);
+
 export default {
   id: '99003',
+  itemType: 'show',
   showType: 'movie',
   title: 'Paper Observatory',
   releaseYear: 2024,
@@ -9,7 +15,7 @@ export default {
   streamingOptions: {
     fr: [
       {
-        service: { id: 'lantern', name: 'Lantern Screen', homePage: 'https://lantern.example/' },
+        service: lantern,
         type: 'subscription',
         link: 'https://lantern.example/watch/paper-observatory',
         quality: 'hd',
