@@ -6,7 +6,17 @@ const minimumTargetSize = 44;
 function checkTargets(container) {
   const problems = [];
   for (const target of container.querySelectorAll(targets)) {
-    if (!target.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    const shown = target.checkVisibility({ visibilityProperty: true });
+    if (!shown || !target.checkVisibility({ opacityProperty: true, visibilityProperty: true })) {
+      // A control hidden on purpose says so in the markup (`hidden`, `aria-hidden` or `inert`); one hidden only by CSS is a defect.
+      // Opacity alone does not count (entrance animations start at 0), and a native input drawn by its visible label is fine.
+      const drawnByLabel = target.localName === 'input' && target.closest('label')?.checkVisibility({ visibilityProperty: true });
+      if (!shown && !drawnByLabel && !target.closest('[hidden], [aria-hidden="true"], [inert]')) {
+        const label = target.getAttribute('aria-label') || target.textContent.trim() || target.id;
+        problems.push(`<${target.localName}>${label ? ` "${label}"` : ''} is hidden by CSS only (expected control must be visible)`);
+      }
+      continue;
+    }
     const { width, height } = target.getBoundingClientRect();
     if (width < minimumTargetSize || height < minimumTargetSize) {
       const label = target.getAttribute('aria-label') || target.textContent.trim() || target.id;
