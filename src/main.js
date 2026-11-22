@@ -39,11 +39,13 @@ function currentView({ settingsOpen }) {
 function render(state) {
   const view = currentView(state);
   const changed = view !== shown;
-  headerSlot.replaceChildren(renderHeader({
-    settingsOpen: view === 'settings',
-    onOpenSettings: openSettings,
-    onCloseSettings: closeSettings,
-  }));
+  if (changed) {
+    headerSlot.replaceChildren(renderHeader({
+      settingsOpen: view === 'settings',
+      onOpenSettings: openSettings,
+      onCloseSettings: closeSettings,
+    }));
+  }
 
   searchView.hidden = view !== 'search';
   welcomeSlot.hidden = view !== 'welcome';
@@ -62,8 +64,9 @@ function render(state) {
       checkKey: app.checkKey,
       quotaLimit: app.quotaLimit,
       // The first saved key ends the first run: go back to search.
-      onChange: () => {
-        if (firstRun && settings.hasKey('tmdb')) closeSettings();
+      onChange: (provider, outcome) => {
+        // An unverified key stays on screen so the user can read the outcome and test again.
+        if (firstRun && settings.hasKey('tmdb') && outcome !== 'unverified') closeSettings();
       },
       onCleared: () => {
         document.documentElement.setAttribute('data-theme', 'dark');

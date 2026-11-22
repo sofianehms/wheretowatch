@@ -17,7 +17,13 @@ function memoryStorage(initial = {}) {
     key: (index) => [...entries.keys()][index] ?? null,
     getItem: (name) => entries.get(name) ?? null,
     setItem: (name, value) => void entries.set(name, String(value)),
-    removeItem: (name) => void entries.delete(name),
+    // Like real storage, removing an entry reorders the remaining keys.
+    removeItem: (name) => {
+      if (!entries.delete(name)) return;
+      const rest = [...entries].reverse();
+      entries.clear();
+      for (const [key, value] of rest) entries.set(key, value);
+    },
   };
 }
 
@@ -251,6 +257,9 @@ const scenarios = [
       if (container.querySelectorAll('.steps li').length !== 3) problems.push('the three steps are not listed');
       if (container.querySelectorAll('h1').length !== 1) problems.push('the welcome needs one heading');
       if (!container.textContent.includes('Streaming Availability key')) problems.push('the optional key is not offered');
+      for (const link of container.querySelectorAll('.steps a')) {
+        if (link.matches('.link--inline')) problems.push(`the link "${link.textContent}" opts out of the touch target`);
+      }
       buttonNamed(container, 'Add my TMDB key').click();
       if (container.opened !== 1) problems.push('the button does not open the Settings');
       return problems;

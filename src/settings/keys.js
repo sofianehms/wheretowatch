@@ -74,9 +74,13 @@ export function createSettings({
 
   function clearStorage() {
     let succeeded = true;
-    for (let index = storage.length - 1; index >= 0; index -= 1) {
+    // Snapshot the names first: removing while walking by index skips entries in real storage.
+    const names = [];
+    for (let index = 0; index < storage.length; index += 1) {
       const name = storage.key(index);
-      if (!name?.startsWith(prefix)) continue;
+      if (name?.startsWith(prefix)) names.push(name);
+    }
+    for (const name of names) {
       try {
         storage.removeItem(name);
       } catch {

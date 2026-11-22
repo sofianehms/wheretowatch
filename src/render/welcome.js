@@ -2,7 +2,7 @@ import { t } from '../i18n/strings.js';
 import { el, richText } from './dom.js';
 
 function link(label, href) {
-  return el('a', 'link link--inline', label, { href, target: '_blank', rel: 'noopener noreferrer' });
+  return el('a', 'link', label, { href, target: '_blank', rel: 'noopener noreferrer' });
 }
 
 /**

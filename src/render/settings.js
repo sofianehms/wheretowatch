@@ -94,7 +94,7 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
     update();
   }
 
-  async function runCheck(trigger) {
+  async function runCheck() {
     controller?.abort();
     controller = new AbortController();
     const { signal } = controller;
@@ -124,10 +124,12 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
 
   test.addEventListener('click', async () => {
     if (test.getAttribute('aria-disabled') === 'true') return;
-    const result = await runCheck(test);
+    const result = await runCheck();
     if (!result) return;
     status = result === 'valid' && value() === saved ? 'saved' : result;
     finish();
+    // A saved key that is now verified ends the first run.
+    if (status === 'saved') onChange(provider, status);
   });
 
   save.addEventListener('click', async () => {
@@ -136,7 +138,7 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
     let note = null;
     if (entered && provider === 'tmdb') {
       // The required key is checked before it is kept; a network failure still saves it.
-      const result = await runCheck(save);
+      const result = await runCheck();
       if (!result) return;
       if (result === 'invalid') {
         status = result;
@@ -156,7 +158,7 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
     saved = entered;
     status = note ?? (entered ? 'saved' : 'removed');
     finish();
-    onChange(provider);
+    onChange(provider, status);
   });
 
   update();
