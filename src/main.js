@@ -1,7 +1,8 @@
 // Startup: compose the services, then show the welcome, the search or the Settings.
 import { compose } from './compose.js';
-import { applyStaticStrings, t } from './i18n/strings.js';
+import { applyStaticStrings } from './i18n/strings.js';
 import { renderHeader } from './render/header.js';
+import { bindSearch } from './render/search.js';
 import { renderSettings } from './render/settings.js';
 import { renderWelcome } from './render/welcome.js';
 
@@ -17,9 +18,7 @@ const settingsSlot = document.querySelector('#settings');
 
 const input = document.querySelector('#q');
 const status = document.querySelector('#status');
-input.addEventListener('input', () => {
-  status.textContent = input.value.trim() ? t('search.loading') : t('search.hint');
-});
+const search = bindSearch(input, status);
 
 const openSettings = () => {
   firstRun = !settings.hasKey('tmdb');
@@ -69,6 +68,8 @@ function render(state) {
         if (firstRun && settings.hasKey('tmdb') && outcome !== 'unverified') closeSettings();
       },
       onCleared: () => {
+        // Erasure also forgets the query typed before, so the next key starts from a blank search.
+        search.reset();
         document.documentElement.setAttribute('data-theme', 'dark');
         closeSettings();
       },

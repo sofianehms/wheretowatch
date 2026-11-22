@@ -48,8 +48,8 @@ test('checkKey sends the Streaming Availability test through the quota', async (
   const storage = fakeStorage();
   const app = compose({ storage, navigatorLike: { language: 'en-GB' } });
   const calls = [];
-  const fetchImpl = async (url) => {
-    calls.push(url);
+  const fetchImpl = async (url, options) => {
+    calls.push({ url: String(url), headers: { ...options.headers } });
     return new Response('{}', { status: 200 });
   };
   assert.equal(await app.checkKey('sa', 'key', { fetchImpl }), 'valid');
@@ -57,4 +57,9 @@ test('checkKey sends the Streaming Availability test through the quota', async (
   assert.equal(await app.checkKey('tmdb', 'token', { fetchImpl }), 'valid');
   assert.equal(app.quota.status().used, 1);
   assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, 'https://api.movieofthenight.com/v4/countries');
+  assert.equal(calls[0].headers['X-API-Key'], 'key');
+  assert.equal(calls[1].url, 'https://api.themoviedb.org/3/configuration');
+  assert.equal(calls[1].headers.Authorization, 'Bearer token');
+  assert.equal(calls[1].headers['X-API-Key'], undefined);
 });

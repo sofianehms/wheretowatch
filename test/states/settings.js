@@ -1,9 +1,10 @@
 import { createCache } from '../../src/api/cache.js';
 import { createQuota } from '../../src/api/quota.js';
+import { bindSearch } from '../../src/render/search.js';
 import { renderClearDialog, renderSettings } from '../../src/render/settings.js';
 import { renderWelcome } from '../../src/render/welcome.js';
 import { createSettings } from '../../src/settings/keys.js';
-import { checkNoOverflow } from './kit.js';
+import { checkNoOverflow, el } from './kit.js';
 
 const sampleKey = 'eyJhbGciOiJIUzI1NiJ9.sample';
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -28,6 +29,12 @@ function memoryStorage(initial = {}) {
 }
 
 function mount(container, { stored = {}, check = async () => 'valid', onCleared } = {}) {
+  container.checks = [];
+  const run = check;
+  check = (provider, value, deps) => {
+    container.checks.push([provider, value]);
+    return run(provider, value, deps);
+  };
   const storage = memoryStorage(stored);
   const quota = createQuota({ storage });
   const settings = createSettings({
@@ -163,16 +170,96 @@ const scenarios = [
     check(container) {
       const problems = checkFields(container);
       if (container.storage.getItem('wtw.key.tmdb') !== null) problems.push('a rejected key was saved');
+      if (!statusOf(fieldOf(container, 'tmdb')).textContent.startsWith('TMDB rejected this key.')) problems.push('the rejection is not reported');
+      if (container.checks.length !== 1 || container.checks[0][0] !== 'tmdb') problems.push('the key was not checked once');
+      return problems;
+    },
+  },
+  {
+    name: 'Settings · the optional key is tested before it is saved',
+    async render(container) {
+      const { storage } = mount(container, { check: async (provider) => (provider === 'sa' ? 'invalid' : 'valid') });
+      container.storage = storage;
+      type(fieldOf(container, 'sa'), 'sa-sample');
+      buttonNamed(container.querySelectorAll('.field')[1], 'Save').click();
+      await settle();
+    },
+    check(container) {
+      const problems = checkFields(container);
+      if (container.storage.getItem('wtw.key.sa') !== null) problems.push('a rejected optional key was saved');
+      if (!statusOf(fieldOf(container, 'sa')).textContent.startsWith('Movie of the Night rejected this key.')) problems.push('the rejection is not reported');
+      if (container.checks.length !== 1 || container.checks[0][0] !== 'sa') problems.push('the optional key was not checked once');
+      return problems;
+    },
+  },
+  {
+    name: 'Settings · a tested key is not charged again on save',
+    async render(container) {
+      const { storage } = mount(container);
+      container.storage = storage;
+      type(fieldOf(container, 'sa'), 'sa-sample');
+      const field = container.querySelectorAll('.field')[1];
+      buttonNamed(field, 'Test').click();
+      await settle();
+      buttonNamed(field, 'Save').click();
+      await settle();
+    },
+    check(container) {
+      const problems = checkFields(container);
+      if (container.storage.getItem('wtw.key.sa') !== 'sa-sample') problems.push('the tested key is not saved');
+      if (container.checks.length !== 1) problems.push(`the key was checked ${container.checks.length} times`);
+      return problems;
+    },
+  },
+  {
+    name: 'Settings · one primary action at a time',
+    render(container) {
+      mount(container);
+    },
+    check(container) {
+      type(fieldOf(container, 'tmdb'), sampleKey);
+      type(fieldOf(container, 'sa'), 'sa-sample');
+      const primary = container.querySelectorAll('.settings .btn--primary');
+      return primary.length === 1 ? [] : [`${primary.length} primary buttons`];
+    },
+  },
+  {
+    name: 'Settings · clearing data also empties the search',
+    render(container) {
+      const search = el('div');
+      const input = el('input', '', '', { id: 'q' });
+      const status = el('p');
+      search.hidden = true; // only the logic is exercised, not the layout
+      search.append(input, status);
+      const view = bindSearch(input, status);
+      const { storage } = mount(container, { stored: { 'wtw.key.tmdb': sampleKey }, onCleared: () => view.reset() });
+      container.prepend(search);
+      container.storage = storage;
+      container.search = { input, status };
+    },
+    check(container) {
+      const { input, status } = container.search;
+      type(input, 'dune');
+      if (status.textContent === 'Type to search.') return ['typing does not update the status'];
+      buttonNamed(container, 'Clear my data').click();
+      buttonNamed(container, 'Clear data').click();
+      const problems = [];
+      if (input.value !== '') problems.push('the previous query survives erasure');
+      if (status.textContent !== 'Type to search.') problems.push('the search status survives erasure');
       return problems;
     },
   },
   {
     name: 'Settings · erasure confirmation',
     render(container) {
-      container.append(renderClearDialog({ onCancel() {}, onConfirm() {} }));
+      container.calls = [];
+      container.append(renderClearDialog({ onCancel: () => container.calls.push('cancel'), onConfirm: () => container.calls.push('confirm') }));
     },
     check(container) {
       const problems = checkNoOverflow(container);
+      buttonNamed(container, 'Cancel').click();
+      buttonNamed(container, 'Clear data').click();
+      if (container.calls.join() !== 'cancel,confirm') problems.push('the buttons do not call their handlers');
       const dialog = container.querySelector('[role="alertdialog"]');
       if (dialog.getAttribute('aria-modal') !== 'true') problems.push('the dialog is not modal');
       if (!dialog.textContent.includes('Clear all data on this device?')) problems.push('the dialog does not ask the question');

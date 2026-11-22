@@ -23,7 +23,7 @@ function statusText(status, provider) {
   return t(key, { provider: t(`settings.${provider}.name`) });
 }
 
-function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
+function keyField({ provider, settings, checkKey, quotaLimit, onChange, onUpdate = () => {} }) {
   const id = uniqueId(`key-${provider}`);
   const stateId = `${id}-state`;
   const helpId = `${id}-help`;
@@ -31,6 +31,8 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
   let status = saved ? 'saved' : 'empty';
   let controller = null;
   let busy = false;
+  // The last value that was tested and its result, so a tested key is not checked again on Save.
+  let tested = null;
 
   const field = el('div', 'field');
   const label = el('label', 'field__label', t(`settings.${provider}.label`), { for: id });
@@ -86,12 +88,8 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
     // aria-disabled keeps the buttons focusable, so keyboard focus is never dropped.
     test.setAttribute('aria-disabled', String(busy || !value()));
     save.setAttribute('aria-disabled', String(busy || value() === saved));
-    save.className = value() === saved ? 'btn btn--secondary' : 'btn btn--primary';
     field.setAttribute('aria-busy', String(busy));
-  }
-
-  function finish() {
-    update();
+    onUpdate();
   }
 
   async function runCheck() {
@@ -101,10 +99,12 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
     busy = true;
     status = 'testing';
     update();
-    const result = await checkKey(provider, value(), { signal });
+    const checked = value();
+    const result = await checkKey(provider, checked, { signal });
     if (signal.aborted) return null;
+    tested = { value: checked, result };
     busy = false;
-    finish();
+    update();
     return result;
   }
 
@@ -127,7 +127,7 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
     const result = await runCheck();
     if (!result) return;
     status = result === 'valid' && value() === saved ? 'saved' : result;
-    finish();
+    update();
     // A saved key that is now verified ends the first run.
     if (status === 'saved') onChange(provider, status);
   });
@@ -136,13 +136,14 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
     if (save.getAttribute('aria-disabled') === 'true') return;
     const entered = value();
     let note = null;
-    if (entered && provider === 'tmdb') {
-      // The required key is checked before it is kept; a network failure still saves it.
-      const result = await runCheck();
+    if (entered) {
+      // Both keys are checked before they are kept (the optional one costs one call of its
+      // monthly quota); a value just tested is not checked again. A network failure still saves it.
+      const result = tested?.value === entered ? tested.result : await runCheck();
       if (!result) return;
       if (result === 'invalid') {
         status = result;
-        finish();
+        update();
         return;
       }
       if (result !== 'valid') note = 'unverified';
@@ -152,18 +153,20 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
       else settings.removeKey(provider);
     } catch {
       status = 'failed';
-      finish();
+      update();
       return;
     }
     saved = entered;
     status = note ?? (entered ? 'saved' : 'removed');
-    finish();
+    update();
     onChange(provider, status);
   });
 
   update();
   return {
     field,
+    save,
+    dirty: () => value() !== saved,
     abort() {
       controller?.abort();
     },
@@ -238,8 +241,18 @@ export function renderSettings({ settings, checkKey, quotaLimit, onChange = () =
   const dataId = uniqueId('settings-data');
   const keys = el('section', '', '', { 'aria-labelledby': keysId });
   const heading = el('h2', '', t('settings.keys.title'), { id: keysId });
-  const tmdb = keyField({ provider: 'tmdb', settings, checkKey, quotaLimit, onChange });
-  const sa = keyField({ provider: 'sa', settings, checkKey, quotaLimit, onChange });
+  // Only one Save is primary at a time: the first field with a pending change.
+  let tmdb;
+  let sa;
+  const markPrimary = () => {
+    const first = [tmdb, sa].find((field) => field?.dirty());
+    for (const field of [tmdb, sa]) {
+      if (field) field.save.className = field === first ? 'btn btn--primary' : 'btn btn--secondary';
+    }
+  };
+  tmdb = keyField({ provider: 'tmdb', settings, checkKey, quotaLimit, onChange, onUpdate: markPrimary });
+  sa = keyField({ provider: 'sa', settings, checkKey, quotaLimit, onChange, onUpdate: markPrimary });
+  markPrimary();
   keys.append(
     heading,
     tmdb.field,
