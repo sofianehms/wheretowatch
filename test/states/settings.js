@@ -1,9 +1,10 @@
 import { createCache } from '../../src/api/cache.js';
 import { createQuota } from '../../src/api/quota.js';
-import { bindSearch } from '../../src/render/search.js';
+import { startApp } from '../../src/app.js';
 import { renderClearDialog, renderSettings } from '../../src/render/settings.js';
 import { renderWelcome } from '../../src/render/welcome.js';
 import { createSettings } from '../../src/settings/keys.js';
+import { createStore } from '../../src/state.js';
 import { checkNoOverflow, el } from './kit.js';
 
 const sampleKey = 'eyJhbGciOiJIUzI1NiJ9.sample';
@@ -53,6 +54,22 @@ function mount(container, { stored = {}, check = async () => 'valid', onCleared,
   container.append(root);
   return { root, storage, settings };
 }
+
+// The real application shell (src/app.js) on a page skeleton, with checks the scenario releases by hand.
+function mountApp(container, { stored = {} } = {}) {
+  container.innerHTML = '<div id="header"></div><div id="welcome" hidden></div><div id="settings" hidden></div>'
+    + '<section id="search-view" hidden><form class="search" role="search"><label for="q" class="visually-hidden">Search</label>'
+    + '<input id="q" name="q" type="search" data-focus-target></form><p id="status" class="muted"></p></section>';
+  const storage = memoryStorage(stored);
+  const quota = createQuota({ storage });
+  const settings = createSettings({ storage, navigatorLike: { language: 'en-GB' }, cache: createCache({ storage }), quota });
+  const store = createStore();
+  const pending = {};
+  const checkKey = (provider) => new Promise((resolve) => { pending[provider] = resolve; });
+  startApp({ store, settings, checkKey, quotaLimit: () => quota.status().limit, durable: true }, container);
+  return { storage, store, pending, settings };
+}
+const shown = (container) => ['welcome', 'settings', 'search-view'].find((id) => !container.querySelector(`#${id}`).hidden);
 
 const type = (input, value) => {
   input.value = value;
@@ -278,26 +295,49 @@ const scenarios = [
   {
     name: 'Settings · clearing data also empties the search',
     render(container) {
-      const search = el('div');
-      const input = el('input', '', '', { id: 'q' });
-      const status = el('p');
-      search.hidden = true; // only the logic is exercised, not the layout
-      search.append(input, status);
-      const view = bindSearch(input, status);
-      const { storage } = mount(container, { stored: { 'wtw.key.tmdb': sampleKey }, onCleared: () => view.reset() });
-      container.prepend(search);
+      const { storage } = mountApp(container, { stored: { 'wtw.key.tmdb': sampleKey } });
       container.storage = storage;
-      container.search = { input, status };
+      container.theme = document.documentElement.getAttribute('data-theme');
     },
     check(container) {
-      const { input, status } = container.search;
+      const input = container.querySelector('#q');
+      const status = container.querySelector('#status');
       type(input, 'dune');
       if (status.textContent === 'Type to search.') return ['typing does not update the status'];
+      const problems = [];
+      container.querySelector('#header .icon-btn').click();
       buttonNamed(container, 'Clear my data').click();
       buttonNamed(container, 'Clear data').click();
-      const problems = [];
+      if (container.theme === null) document.documentElement.removeAttribute('data-theme');
+      else document.documentElement.setAttribute('data-theme', container.theme);
       if (input.value !== '') problems.push('the previous query survives erasure');
       if (status.textContent !== 'Type to search.') problems.push('the search status survives erasure');
+      return problems;
+    },
+  },
+  {
+    name: 'Settings · first run keeps Settings open while the other key is saved',
+    async render(container) {
+      const app = mountApp(container);
+      container.app = app;
+      container.querySelector('#header .icon-btn').click();
+      type(fieldOf(container, 'tmdb'), sampleKey);
+      type(fieldOf(container, 'sa'), 'sa-sample');
+      const fields = container.querySelectorAll('.field');
+      buttonNamed(fields[0], 'Save').click();
+      buttonNamed(fields[1], 'Save').click();
+      app.pending.tmdb('valid');
+      await settle();
+      container.afterTmdb = shown(container);
+      app.pending.sa('valid');
+      await settle();
+    },
+    check(container) {
+      const problems = [];
+      if (container.afterTmdb !== 'settings') problems.push(`Settings closed (${container.afterTmdb}) while the other key was still being saved`);
+      if (container.app.storage.getItem('wtw.key.sa') !== 'sa-sample') problems.push('the second key was not stored');
+      if (container.app.storage.getItem('wtw.key.tmdb') !== sampleKey) problems.push('the first key was not stored');
+      if (shown(container) !== 'search-view') problems.push(`the first run did not end on the search (${shown(container)})`);
       return problems;
     },
   },
@@ -382,6 +422,7 @@ const scenarios = [
       const save = buttonNamed(container, 'Save');
       save.focus();
       save.click();
+      if (container.querySelector('.field').getAttribute('aria-busy') !== 'true') return ['no key check is in progress'];
       return document.activeElement === save ? [] : ['focus leaves the Save button while the key is checked'];
     },
   },

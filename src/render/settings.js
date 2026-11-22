@@ -178,6 +178,7 @@ function keyField({ provider, settings, checkKey, quotaLimit, durable, onChange,
     field,
     save,
     dirty: () => value() !== saved,
+    busy: () => busy,
     abort() {
       controller?.abort();
     },
@@ -245,7 +246,7 @@ export function renderClearDialog({ onCancel, onConfirm }) {
  * @param {(provider: 'tmdb'|'sa', outcome: string) => void} [options.onChange] Called after a key is saved,
  *   removed or verified; `outcome` is `saved`, `unverified` or `removed`.
  * @param {() => void} [options.onCleared] Called after all data has been cleared.
- * @returns {HTMLElement} The screen; its `dispose()` cancels any pending key check or save.
+ * @returns {HTMLElement} The screen; `pending()` tells whether a key check or save is running; `dispose()` cancels it.
  */
 export function renderSettings({ settings, checkKey, quotaLimit, durable = true, onChange = () => {}, onCleared = () => {} }) {
   const root = el('div', 'settings');
@@ -309,6 +310,7 @@ export function renderSettings({ settings, checkKey, quotaLimit, durable = true,
     dialog.initialFocus.focus();
   });
 
+  root.pending = () => tmdb.busy() || sa.busy();
   root.dispose = () => {
     tmdb.abort();
     sa.abort();
