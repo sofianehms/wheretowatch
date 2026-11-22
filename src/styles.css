@@ -52,7 +52,7 @@ h1 { font-size: var(--text-xl); }
 /* ---------- Header ---------- */
 .app-header {
   position: sticky; top: 0; z-index: var(--z-sticky);
-  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: var(--space-2) var(--space-3);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2) var(--space-3);
   padding: max(var(--space-2), env(safe-area-inset-top)) 0 var(--space-2);
   background: var(--color-bg);
 }
@@ -60,6 +60,8 @@ h1 { font-size: var(--text-xl); }
   font-size: var(--text-md); font-weight: var(--weight-heavy); letter-spacing: var(--tracking-tight);
   color: var(--color-text-strong); text-decoration: none; }
 .brand__name { margin: 0; font: inherit; }
+.brand { min-width: 0; }
+.brand > span { min-width: 0; overflow-wrap: anywhere; }
 .mark { width: var(--mark-size); height: var(--mark-size); flex: none; }
 .mark__pin { fill: var(--color-accent); }
 .mark__play { fill: var(--color-accent-text); }

@@ -22,15 +22,23 @@
   <script src="src/theme-boot.js"></script>
 </head>
 <body>
-  <main class="app">
-    <h1 data-i18n="common.name">Where to Watch</h1>
-    <form class="search" role="search">
-      <label for="q" class="visually-hidden" data-i18n="search.label">Search</label>
-      <input id="q" name="q" type="search" data-i18n="search.placeholder" data-i18n-attr="placeholder" placeholder="Search" autocomplete="off" enterkeyhint="search">
-    </form>
-    <p id="status" class="muted" role="status" aria-live="polite" data-i18n="search.hint">Type to search.</p>
-    <ul id="results" class="results"></ul>
-  </main>
+  <a class="skip-link" href="#main" data-i18n="common.skip">Skip to content</a>
+  <div class="page">
+    <div id="header"></div>
+    <main id="main" class="column">
+      <div id="welcome" hidden></div>
+      <div id="settings" hidden></div>
+      <section id="search-view" hidden>
+        <h1 class="visually-hidden" data-i18n="common.name">Where to Watch</h1>
+        <form class="search" role="search">
+          <label for="q" class="visually-hidden" data-i18n="search.label">Search</label>
+          <input id="q" name="q" type="search" data-i18n="search.placeholder" data-i18n-attr="placeholder" placeholder="Search" autocomplete="off" enterkeyhint="search">
+        </form>
+        <p id="status" class="muted" role="status" aria-live="polite" data-i18n="search.hint">Type to search.</p>
+        <ul id="results" class="results"></ul>
+      </section>
+    </main>
+  </div>
   <script type="module" src="src/main.js"></script>
 </body>
 </html>

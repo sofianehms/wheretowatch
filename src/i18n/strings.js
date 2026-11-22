@@ -45,6 +45,10 @@ export function formatDate(date) {
   }).format(date);
 }
 
+export function formatNumber(value) {
+  return new Intl.NumberFormat(dateLocales[locale]).format(value);
+}
+
 function displayName(code, type) {
   try {
     return new Intl.DisplayNames(locale, { type, fallback: 'none' }).of(code) ?? code;
