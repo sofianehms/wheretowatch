@@ -47,7 +47,7 @@ test('falls back to documented defaults without usable configuration', () => {
   assert.deepEqual(posterSrcset(path, 'detail', { poster_sizes: ['w500', 'original'] }), fallback);
   assert.deepEqual(posterSrcset(path, 'detail', {
     secure_base_url: `${base}original/`,
-    poster_sizes: ['w780', 'original'],
+    poster_sizes: ['w342', 'original'],
   }), fallback);
   assert.deepEqual(posterSrcset(path, 'detail', {
     secure_base_url: configuration.images.base_url,
@@ -68,6 +68,7 @@ test('falls back when a configured base path contains api_key', () => {
   for (const segment of ['api_key', 'API_KEY']) {
     assert.deepEqual(posterSrcset(path, 'detail', {
       secure_base_url: `https://image.tmdb.org/${segment}/`,
+      poster_sizes: ['w342'],
     }), fallback);
   }
 });

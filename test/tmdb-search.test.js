@@ -141,6 +141,16 @@ test('honors Retry-After and makes at most one retry', async () => {
   assert.equal(calls.length, 4);
 });
 
+test('surfaces a 429 without retrying when Retry-After exceeds the wait budget', async () => {
+  const { source, calls, waits } = setup([
+    json(rateLimit, { status: rateLimitStatus, headers: { 'Retry-After': '30' } }),
+    json(search),
+  ]);
+  await assert.rejects(source.searchTitles('Glass'), { type: 'rateLimited', status: 429 });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(waits, []);
+});
+
 test('caches dynamic region codes and image configuration for seven days with fetchedAt', async () => {
   const updated = { results: [{ iso_3166_1: 'JP' }] };
   const { source, calls, clock, cache } = setup([

@@ -35,7 +35,7 @@ export function createTmdbSource({
     return http(url.href, {
       headers: { Authorization: `Bearer ${token}` },
       signal,
-      retryOn429: true,
+      retryOn429: 'within-budget',
     });
   }
 

@@ -40,7 +40,7 @@ function retryDelay(headers) {
   const value = headers.get('Retry-After')?.trim();
   if (!value) return 0;
   const milliseconds = /^\d+$/.test(value) ? Number(value) * 1000 : Date.parse(value) - Date.now();
-  return Math.min(MAX_WAIT_MS, Math.max(0, milliseconds || 0));
+  return Math.max(0, milliseconds || 0);
 }
 
 function delay(ms, signal) {
@@ -88,7 +88,8 @@ function failureType(status) {
 /**
  * Returns JSON or throws an HttpError whose type identifies the failure.
  * Each attempt has its own timeout for fetching and parsing, capped at 10 seconds.
- * The retry wait is capped separately.
+ * The retry wait is capped separately. Set retryOn429 to 'within-budget'
+ * to surface the rate-limit error when Retry-After exceeds that cap.
  * An injected sleep(ms, signal) waits in milliseconds and should stop on abort.
  */
 export async function request(url, {
@@ -116,10 +117,11 @@ export async function request(url, {
   });
 
   let result = await attempt();
-  if (retryOn429 && result.type === 'rateLimited') {
+  if (retryOn429 && result.type === 'rateLimited' &&
+      (retryOn429 !== 'within-budget' || result.wait <= MAX_WAIT_MS)) {
     await run(url, signal, null, async (active) => {
       try {
-        await sleep(result.wait, active);
+        await sleep(Math.min(result.wait, MAX_WAIT_MS), active);
       } catch {
         throw new HttpError('network', url);
       }
