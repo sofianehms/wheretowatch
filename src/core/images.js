@@ -5,10 +5,9 @@ const posterCandidates = {
   detail: [['w342', '1x'], ['w500', '3x']],
 };
 
-function secureBase(value) {
+function isSecureBase(value) {
   // Use the HTTPS image origin permitted by the application's CSP.
-  return /^https:\/\/image\.tmdb\.org\/(?:[\w-]+\/)+$/.test(value) && !forbiddenUrlText.test(value)
-    ? value : defaultBase;
+  return /^https:\/\/image\.tmdb\.org\/(?:[\w-]+\/)+$/.test(value) && !forbiddenUrlText.test(value);
 }
 
 /**
@@ -23,9 +22,11 @@ export function posterSrcset(path, variant, configuration) {
   const expected = posterCandidates[variant];
   const available = configuration?.poster_sizes;
   const supported = Array.isArray(available)
-    ? expected.filter(([size]) => available.includes(size)) : expected;
-  const candidates = supported.some(([, density]) => density !== '3x') ? supported : expected;
-  const base = secureBase(configuration?.secure_base_url);
+    ? expected.filter(([size]) => available.includes(size)) : [];
+  const configuredBase = configuration?.secure_base_url;
+  const useConfiguration = supported.some(([, density]) => density !== '3x') && isSecureBase(configuredBase);
+  const base = useConfiguration ? configuredBase : defaultBase;
+  const candidates = useConfiguration ? supported : expected;
   return {
     src: base + candidates[0][0] + path,
     srcset: candidates.map(([size, density]) => `${base}${size}${path} ${density}`).join(', '),

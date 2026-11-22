@@ -30,6 +30,16 @@ test('uses the configured secure base and filters unsupported sizes', () => {
   });
 });
 
+test('uses the default base and sizes when a custom base only advertises w500', () => {
+  assert.deepEqual(posterSrcset(path, 'detail', {
+    secure_base_url: 'https://image.tmdb.org/custom/posters/',
+    poster_sizes: ['w500'],
+  }), {
+    src: `${base}w342${path}`,
+    srcset: `${base}w342${path} 1x, ${base}w500${path} 3x`,
+  });
+});
+
 test('falls back to documented defaults without usable configuration', () => {
   const fallback = posterSrcset(path, 'detail');
   assert.equal(fallback.src, `${base}w342${path}`);
