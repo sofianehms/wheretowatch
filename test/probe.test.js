@@ -50,6 +50,7 @@ test('compares matching quota counters and treats conflicting evidence as inconc
 test('counts each Netflix country once and distinguishes audio, subtitles and closed captions', () => {
   const fixture = structuredClone(show);
   const [originalOffer] = fixture.streamingOptions.us;
+  originalOffer.subtitles[0].closedCaptions = true;
   const [emptyOffer] = fixture.streamingOptions.fr;
   fixture.streamingOptions.fr.push({
     ...emptyOffer, subtitles: [{ locale: { language: 'fra' }, closedCaptions: false }],
@@ -99,8 +100,8 @@ test('renders fixture findings without raw values or a fictitious key in headers
   for (const heading of ['V-01 — TMDB', 'V-02 — Streaming Availability', 'Service identifiers']) {
     assert.ok(report.includes('## ' + heading + '\n\nStatus: observed'));
   }
-  assert.match(report, /1\/3 \(33\.3%\)/);
-  assert.match(report, /ads key in TV availability: not observed/);
+  assert.match(report, /2\/10 \(20\.0%\)/);
+  assert.match(report, /ads key in TV availability: observed/);
   assert.match(report, /Netflix with provider ID 8 in movie catalog: observed/);
   assert.match(report, /"poster_sizes": \["w92","w154"/);
   assert.match(report, /Mapping proposal — to be confirmed/);
@@ -110,10 +111,10 @@ test('renders fixture findings without raw values or a fictitious key in headers
   assert.ok(!report.includes(show.streamingOptions.us[0].link));
   assert.equal(maskKeys('abc.* abc', ['abc', 'abc.*']), '[redacted] [redacted]');
   const rates = [
-    '| Overall | 1/3 (33.3%) | 1/3 (33.3%) | 1/3 (33.3%) |',
+    '| Overall | 1/3 (33.3%) | 1/3 (33.3%) | 0/3 (0.0%) |',
     '| FR | 0/2 (0.0%) | 0/2 (0.0%) | 0/2 (0.0%) |',
-    '| US | 1/1 (100.0%) | 1/1 (100.0%) | 1/1 (100.0%) |',
-    '| 900001 (HTTP 200) | 1/2 (50.0%) | 1/2 (50.0%) | 1/2 (50.0%) |',
+    '| US | 1/1 (100.0%) | 1/1 (100.0%) | 0/1 (0.0%) |',
+    '| 900001 (HTTP 200) | 1/2 (50.0%) | 1/2 (50.0%) | 0/2 (0.0%) |',
     '| 900001 / FR | 0/1 (0.0%) | 0/1 (0.0%) | 0/1 (0.0%) |',
   ];
   for (const row of rates) assert.ok(report.includes(row), row);
@@ -132,7 +133,7 @@ test('renders fixture findings without raw values or a fictitious key in headers
     });
     assert.ok(partial.includes('Streaming Availability requests sent: 2/' + sampleSize));
     assert.ok(partial.includes('Measurement status: Incomplete\n- Titles contributing to the observed rates: 1/' + sampleSize));
-    assert.match(partial, /\| Overall \| 1\/2 \(50\.0%\) \| 1\/2 \(50\.0%\) \| 1\/2 \(50\.0%\) \|/);
+    assert.match(partial, /\| Overall \| 1\/2 \(50\.0%\) \| 1\/2 \(50\.0%\) \| 0\/2 \(0\.0%\) \|/);
     assert.match(partial, /2 \(HTTP 429, Unexpected HTTP status\.\)/);
   }
 
@@ -149,7 +150,7 @@ test('renders fixture findings without raw values or a fictitious key in headers
   });
   assert.match(sparse, /Matching show responses with a streaming options map: 20\/20\n/);
   assert.match(sparse, /Measurement status: Incomplete\n- Titles contributing to the observed rates: 1\/20\n/);
-  assert.match(sparse, /\| Overall \| 1\/2 \(50\.0%\) \| 1\/2 \(50\.0%\) \| 1\/2 \(50\.0%\) \|/);
+  assert.match(sparse, /\| Overall \| 1\/2 \(50\.0%\) \| 1\/2 \(50\.0%\) \| 0\/2 \(0\.0%\) \|/);
 });
 
 const repo = fileURLToPath(new URL('../', import.meta.url));
@@ -230,7 +231,7 @@ test('runs confirmed V-05 and V-18 and excludes responses for the wrong title', 
 
     const report = await readFile(output, 'utf8');
     assert.match(report, /Measurement status: Incomplete\n- Titles contributing to the observed rates: 17\/20/);
-    assert.ok(report.includes('| Overall |' + ' 17/34 (50.0%) |'.repeat(3)));
+    assert.ok(report.includes('| Overall | 17/34 (50.0%) | 17/34 (50.0%) | 0/34 (0.0%) |'));
     for (const id of ids.slice(1, 4)) {
       assert.ok(report.includes('| ' + id + ' (HTTP 200, TMDB ID mismatch (expected movie/' + id + ').) | n/a | n/a | n/a |'));
     }
