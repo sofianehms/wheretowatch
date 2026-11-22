@@ -135,6 +135,21 @@ test('renders fixture findings without raw values or a fictitious key in headers
     assert.match(partial, /\| Overall \| 1\/2 \(50\.0%\) \| 1\/2 \(50\.0%\) \| 1\/2 \(50\.0%\) \|/);
     assert.match(partial, /2 \(HTTP 429, Unexpected HTTP status\.\)/);
   }
+
+  const titlesWithoutNetflix = Array.from({ length: 19 }, (_, index) => {
+    const id = 900002 + index;
+    return { ...observed('Show', { tmdbId: 'movie/' + id, streamingOptions: {} }), id };
+  });
+  const sparse = renderReport({
+    ...fixture,
+    v05: {
+      ...fixture.v05, sampleSize: 20, selected: 20,
+      titles: [fixture.v05.titles[0], ...titlesWithoutNetflix],
+    },
+  });
+  assert.match(sparse, /Matching show responses with a streaming options map: 20\/20\n/);
+  assert.match(sparse, /Measurement status: Incomplete\n- Titles contributing to the observed rates: 1\/20\n/);
+  assert.match(sparse, /\| Overall \| 1\/2 \(50\.0%\) \| 1\/2 \(50\.0%\) \| 1\/2 \(50\.0%\) \|/);
 });
 
 const repo = fileURLToPath(new URL('../', import.meta.url));

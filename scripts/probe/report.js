@@ -49,8 +49,7 @@ function languageReport({ region, sampleSize, selected, discovery, titles }) {
   });
   const usableCount = sample.filter(({ usable }) => usable).length;
   const contributingCount = sample.filter(({ observations }) => observations.length).length;
-  const measurement = usableCount < sampleSize ? 'Incomplete'
-    : contributingCount === 0 ? 'Inconclusive (no Netflix offers observed)' : 'Complete';
+  const measurement = contributingCount < sampleSize ? 'Incomplete' : 'Complete';
   const observations = sample.flatMap((title) => title.observations);
   const countries = [...new Set(observations.map(({ country }) => country))].sort();
   return [
@@ -62,6 +61,9 @@ function languageReport({ region, sampleSize, selected, discovery, titles }) {
     '- Matching show responses with a streaming options map: ' + usableCount + '/' + sampleSize,
     '- Last discovery response: ' + (discovery?.status ?? 'not observed') + ' (' + (discovery?.anomaly ?? 'no anomaly') + ')',
     ...(selected < sampleSize ? ['- No show requests sent because discovery did not fill the sample.'] : []),
+    '',
+    'V-05 samples the first distinct movies returned by TMDB discovery for Netflix in the selected region. ' +
+      'The rates describe this sample and its observed offers.',
     '',
     'Each observed movie-country pair with a Netflix offer counts once. A field is present if any Netflix offer ' +
       'in that pair lists a language for it. Closed captions require a subtitle language marked as closed captions.',
