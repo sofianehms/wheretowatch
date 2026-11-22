@@ -83,16 +83,15 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
       state.classList.add(`key-state--${tone}`);
       state.append(icon(iconName, 'sm'), statusText(status, provider));
     }
-    test.disabled = busy || !value();
-    save.disabled = busy || value() === saved;
+    // aria-disabled keeps the buttons focusable, so keyboard focus is never dropped.
+    test.setAttribute('aria-disabled', String(busy || !value()));
+    save.setAttribute('aria-disabled', String(busy || value() === saved));
+    save.className = value() === saved ? 'btn btn--secondary' : 'btn btn--primary';
     field.setAttribute('aria-busy', String(busy));
   }
 
-  // Disabling a button moves focus to the page; hand it back once the work is done.
-  function finish(trigger) {
-    const lost = document.activeElement === document.body;
+  function finish() {
     update();
-    if (lost && trigger.isConnected) trigger.focus();
   }
 
   async function runCheck(trigger) {
@@ -105,7 +104,7 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
     const result = await checkKey(provider, value(), { signal });
     if (signal.aborted) return null;
     busy = false;
-    finish(trigger);
+    finish();
     return result;
   }
 
@@ -124,13 +123,15 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
   });
 
   test.addEventListener('click', async () => {
+    if (test.getAttribute('aria-disabled') === 'true') return;
     const result = await runCheck(test);
     if (!result) return;
     status = result === 'valid' && value() === saved ? 'saved' : result;
-    finish(test);
+    finish();
   });
 
   save.addEventListener('click', async () => {
+    if (save.getAttribute('aria-disabled') === 'true') return;
     const entered = value();
     let note = null;
     if (entered && provider === 'tmdb') {
@@ -139,7 +140,7 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
       if (!result) return;
       if (result === 'invalid') {
         status = result;
-        finish(save);
+        finish();
         return;
       }
       if (result !== 'valid') note = 'unverified';
@@ -149,12 +150,12 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange }) {
       else settings.removeKey(provider);
     } catch {
       status = 'failed';
-      finish(save);
+      finish();
       return;
     }
     saved = entered;
     status = note ?? (entered ? 'saved' : 'removed');
-    finish(save);
+    finish();
     onChange(provider);
   });
 
@@ -226,6 +227,7 @@ export function renderClearDialog({ onCancel, onConfirm }) {
  * @param {() => number} [options.quotaLimit] Monthly call limit of the optional source.
  * @param {(provider: string) => void} [options.onChange] Called after a key is saved or removed.
  * @param {() => void} [options.onCleared] Called after all data has been cleared.
+ * @returns {HTMLElement} The screen; its `dispose()` cancels any pending key check or save.
  */
 export function renderSettings({ settings, checkKey, quotaLimit, onChange = () => {}, onCleared = () => {} }) {
   const root = el('div', 'settings');
@@ -278,6 +280,10 @@ export function renderSettings({ settings, checkKey, quotaLimit, onChange = () =
     dialog.initialFocus.focus();
   });
 
+  root.dispose = () => {
+    tmdb.abort();
+    sa.abort();
+  };
   root.append(keys, data);
   return root;
 }

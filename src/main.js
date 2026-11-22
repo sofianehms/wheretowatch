@@ -21,10 +21,15 @@ input.addEventListener('input', () => {
   status.textContent = input.value.trim() ? t('search.loading') : t('search.hint');
 });
 
-const openSettings = () => store.set({ settingsOpen: true });
+const openSettings = () => {
+  firstRun = !settings.hasKey('tmdb');
+  store.set({ settingsOpen: true });
+};
 const closeSettings = () => store.set({ settingsOpen: false });
 
 let shown = null;
+let screen = null;
+let firstRun = false;
 
 function currentView({ settingsOpen }) {
   if (settingsOpen) return 'settings';
@@ -45,16 +50,27 @@ function render(state) {
   settingsSlot.hidden = view !== 'settings';
   if (!changed) return;
 
+  // Leaving Settings cancels any key check or save still running, so nothing is stored late.
+  screen?.dispose?.();
+  screen = null;
   welcomeSlot.replaceChildren();
   settingsSlot.replaceChildren();
   if (view === 'welcome') welcomeSlot.append(renderWelcome({ onOpenSettings: openSettings }));
   if (view === 'settings') {
-    settingsSlot.append(renderSettings({
+    screen = renderSettings({
       settings,
       checkKey: app.checkKey,
       quotaLimit: app.quotaLimit,
-      onCleared: closeSettings,
-    }));
+      // The first saved key ends the first run: go back to search.
+      onChange: () => {
+        if (firstRun && settings.hasKey('tmdb')) closeSettings();
+      },
+      onCleared: () => {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        closeSettings();
+      },
+    });
+    settingsSlot.append(screen);
   }
   // Move the keyboard and screen reader position to the new screen, but not on first load.
   const target = shown === null ? null : document.querySelector('[data-focus-target]');

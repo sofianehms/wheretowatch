@@ -87,8 +87,10 @@ h1 { font-size: var(--text-xl); }
 .btn--secondary:hover { background: var(--color-surface-hover); }
 .btn--ghost { background: transparent; color: var(--color-text); padding: 0 var(--space-3); }
 .btn--ghost:hover { background: var(--color-surface-hover); }
-.btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
-.btn:disabled:active { transform: none; }
+.btn:disabled,
+.btn[aria-disabled="true"] { opacity: var(--disabled-opacity); cursor: not-allowed; }
+.btn:disabled:active,
+.btn[aria-disabled="true"]:active { transform: none; }
 .btn--danger { background: transparent; color: var(--color-danger); border-color: var(--color-danger); }
 .btn--danger:hover { background: var(--color-surface-hover); }
 .icon-btn {

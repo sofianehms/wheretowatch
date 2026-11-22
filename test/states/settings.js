@@ -80,7 +80,7 @@ function testScenario(name, outcome, expected) {
       if (!state.querySelector('svg')) problems.push('the status has no icon');
       if (state.getAttribute('role') !== 'status') problems.push('the status is not announced');
       const busy = outcome === 'pending';
-      if (buttonNamed(container, 'Test').disabled !== busy) problems.push('the Test button state is wrong');
+      if (buttonNamed(container, 'Test').getAttribute('aria-disabled') !== String(busy)) problems.push('the Test button state is wrong');
       return problems;
     },
   };
@@ -97,7 +97,7 @@ const scenarios = [
       const tmdb = fieldOf(container, 'tmdb');
       if (tmdb.value !== '' || tmdb.type !== 'password') problems.push('the TMDB field is not empty and masked');
       if (!statusOf(tmdb).hidden) problems.push('an empty field shows a status');
-      if (!buttonNamed(container, 'Test').disabled) problems.push('Test is enabled without a key');
+      if (buttonNamed(container, 'Test').getAttribute('aria-disabled') !== 'true') problems.push('Test is enabled without a key');
       const links = [...container.querySelectorAll('a[href^="https://"]')];
       if (links.length !== 2 || links.some((link) => link.rel !== 'noopener noreferrer')) problems.push('the key creation links are missing or unsafe');
       if (!container.textContent.includes('1 of your 1,000 free monthly calls')) problems.push('the quota cost of the optional test is not mentioned');
@@ -131,7 +131,7 @@ const scenarios = [
   {
     name: 'Settings · save a valid key',
     async render(container) {
-      mount(container);
+      container.storage = mount(container).storage;
       type(fieldOf(container, 'tmdb'), `  ${sampleKey}  `);
       buttonNamed(container, 'Save').click();
       await settle();
@@ -140,7 +140,8 @@ const scenarios = [
       const problems = checkFields(container);
       const input = fieldOf(container, 'tmdb');
       if (statusOf(input).textContent !== 'Saved on this device.') problems.push('the key is not reported as saved');
-      if (!buttonNamed(container, 'Save').disabled) problems.push('Save stays enabled once the key is saved');
+      if (buttonNamed(container, 'Save').getAttribute('aria-disabled') !== 'true') problems.push('Save stays enabled once the key is saved');
+      if (container.storage.getItem('wtw.key.tmdb') !== sampleKey) problems.push('the key is not written to storage');
       return problems;
     },
   },
@@ -207,6 +208,36 @@ const scenarios = [
       if (container.cleared !== 1) problems.push('the screen is not told that data was cleared');
       if (container.querySelector('[role="alertdialog"]')) problems.push('the dialog stays open after clearing');
       return problems;
+    },
+  },
+  {
+    name: 'Settings · leaving during a save does not store the key',
+    async render(container) {
+      let release;
+      const { root, storage, settings } = mount(container, { check: () => new Promise((resolve) => { release = resolve; }) });
+      type(fieldOf(container, 'tmdb'), sampleKey);
+      buttonNamed(container, 'Save').click();
+      root.dispose();
+      settings.clearAll();
+      release('valid');
+      await settle();
+      container.storage = storage;
+    },
+    check(container) {
+      return container.storage.getItem('wtw.key.tmdb') === null ? [] : ['a save started before leaving restored a key after erasure'];
+    },
+  },
+  {
+    name: 'Settings · focus stays on the pressed button during a check',
+    render(container) {
+      mount(container, { check: () => new Promise(() => {}) });
+    },
+    check(container) {
+      type(fieldOf(container, 'tmdb'), sampleKey);
+      const save = buttonNamed(container, 'Save');
+      save.focus();
+      save.click();
+      return document.activeElement === save ? [] : ['focus leaves the Save button while the key is checked'];
     },
   },
   {

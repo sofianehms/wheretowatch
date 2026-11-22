@@ -36,7 +36,7 @@ export default {
   'status.removed': 'Key removed.',
   'status.failed': 'Couldn’t save on this device. Check that your browser allows storage.',
   'data.title': 'Your data',
-  'data.privacy': 'Nothing leaves this device except your searches, sent to TMDB and Movie of the Night. No account, no cookie, no tracking.',
+  'data.privacy': 'Nothing leaves this device except your searches, sent to TMDB and Movie of the Night, and a key you test or save, sent to its own provider to check it. No account, no cookie, no tracking.',
   'data.retention': 'In Safari, data may be erased after 7 days without use. Add the app to your Home Screen with {webApp} on to keep it.',
   'data.webApp': 'Open as Web App',
   'data.clear': 'Clear my data',
