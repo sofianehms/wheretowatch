@@ -29,14 +29,14 @@ function memoryStorage(initial = {}) {
   };
 }
 
-function mount(container, { stored = {}, check = async () => 'valid', onCleared, durable } = {}) {
+function mount(container, { stored = {}, storage: shared, check = async () => 'valid', onCleared, durable } = {}) {
   container.checks = [];
   const run = check;
   check = (provider, value, deps) => {
     container.checks.push([provider, value]);
     return run(provider, value, deps);
   };
-  const storage = memoryStorage(stored);
+  const storage = shared ?? memoryStorage(stored);
   const quota = createQuota({ storage });
   const settings = createSettings({
     storage,
@@ -56,18 +56,22 @@ function mount(container, { stored = {}, check = async () => 'valid', onCleared,
 }
 
 // The real application shell (src/app.js) on a page skeleton, with checks the scenario releases by hand.
-function mountApp(container, { stored = {} } = {}) {
-  container.innerHTML = '<div id="header"></div><div id="welcome" hidden></div><div id="settings" hidden></div>'
+function mountApp(container, { stored = {}, productionRoot = false } = {}) {
+  const html = '<div id="header"></div><div id="welcome" hidden></div><div id="settings" hidden></div>'
     + '<section id="search-view" hidden><form class="search" role="search"><label for="q" class="visually-hidden">Search</label>'
     + '<input id="q" name="q" type="search" data-focus-target></form><p id="status" class="muted"></p></section>';
+  // The production entry point defaults to the whole document, whose `ownerDocument` is null.
+  const root = productionRoot ? document.implementation.createHTMLDocument('') : container;
+  if (productionRoot) root.body.innerHTML = html;
+  else container.innerHTML = html;
   const storage = memoryStorage(stored);
   const quota = createQuota({ storage });
   const settings = createSettings({ storage, navigatorLike: { language: 'en-GB' }, cache: createCache({ storage }), quota });
   const store = createStore();
   const pending = {};
   const checkKey = (provider) => new Promise((resolve) => { pending[provider] = resolve; });
-  startApp({ store, settings, checkKey, quotaLimit: () => quota.status().limit, durable: true }, container);
-  return { storage, store, pending, settings };
+  startApp({ store, settings, checkKey, quotaLimit: () => quota.status().limit, durable: true }, root);
+  return { root, storage, store, pending, settings };
 }
 const shown = (container) => ['welcome', 'settings', 'search-view'].find((id) => !container.querySelector(`#${id}`).hidden);
 
@@ -164,12 +168,14 @@ const scenarios = [
       type(fieldOf(first.root, 'tmdb'), sampleKey);
       buttonNamed(first.root, 'Save').click();
       await settle();
-      // Reopen Settings on the same storage, as after a reload.
+      container.markerWritten = first.storage.getItem('wtw.unverified.tmdb') !== null;
+      // Reopen Settings on the very same storage, as after a reload.
       container.replaceChildren();
-      mount(container, { stored: { 'wtw.key.tmdb': sampleKey, 'wtw.unverified.tmdb': '1' } });
+      mount(container, { storage: first.storage });
     },
     check(container) {
       const problems = checkFields(container);
+      if (!container.markerWritten) problems.push('the first save did not write the unchecked marker');
       const state = statusOf(fieldOf(container, 'tmdb'));
       if (!state.textContent.includes('not checked yet. Press Test')) problems.push('the unchecked outcome is lost after reopening');
       if (state.classList.contains('key-state--ok')) problems.push('an unchecked key shows a success look');
@@ -312,6 +318,45 @@ const scenarios = [
       else document.documentElement.setAttribute('data-theme', container.theme);
       if (input.value !== '') problems.push('the previous query survives erasure');
       if (status.textContent !== 'Type to search.') problems.push('the search status survives erasure');
+      return problems;
+    },
+  },
+  {
+    name: 'Settings · erasure through the production entry point closes Settings and drops the key',
+    render(container) {
+      const app = mountApp(container, { stored: { 'wtw.key.tmdb': sampleKey }, productionRoot: true });
+      container.app = app;
+      app.root.querySelector('#header .icon-btn').click();
+      buttonNamed(app.root, 'Clear my data').click();
+      buttonNamed(app.root, 'Clear data').click();
+    },
+    check(container) {
+      const { root, storage } = container.app;
+      const problems = [];
+      if (shown(root) !== 'welcome') problems.push(`the screen after erasure is ${shown(root)}, not the welcome`);
+      if (root.querySelector('input[id^="key-tmdb-"]')) problems.push('the erased key field is still on screen');
+      if (storage.getItem('wtw.key.tmdb') !== null) problems.push('the key is still stored');
+      return problems;
+    },
+  },
+  {
+    name: 'Settings · a save finishing keeps the erasure confirmation open',
+    async render(container) {
+      const app = mountApp(container);
+      container.app = app;
+      container.querySelector('#header .icon-btn').click();
+      type(fieldOf(container, 'tmdb'), sampleKey);
+      buttonNamed(container, 'Save').click();
+      buttonNamed(container, 'Clear my data').click();
+      app.pending.tmdb('valid');
+      await settle();
+      // The shell made the heading a programmatic focus target; it is not an interactive control.
+      container.querySelector('[data-focus-target]')?.removeAttribute('tabindex');
+    },
+    check(container) {
+      const problems = [];
+      if (shown(container) !== 'settings') problems.push(`Settings was left (${shown(container)}) while the confirmation was open`);
+      if (!container.querySelector('[role="alertdialog"]')) problems.push('the confirmation vanished before the user decided');
       return problems;
     },
   },

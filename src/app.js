@@ -67,13 +67,14 @@ export function startApp(app, root = document) {
         // The first saved key ends the first run: go back to search.
         onChange: () => {
           // An unverified key stays on screen so the user can read the outcome and test again.
-          // Nor does the screen close while the other key is still being checked: leaving would cancel that save.
-          if (firstRun && settings.hasKey('tmdb') && !settings.isUnverified('tmdb') && !screen.pending()) closeSettings();
+          // Nor does the screen close while the other key is still being checked (leaving would cancel that save)
+          // or while the erasure confirmation waits for the user's decision.
+          if (firstRun && settings.hasKey('tmdb') && !settings.isUnverified('tmdb') && !screen.pending() && !screen.confirming()) closeSettings();
         },
         onCleared: () => {
           // Erasure also forgets the query typed before, so the next key starts from a blank search.
           search.reset();
-          root.ownerDocument.documentElement.setAttribute('data-theme', 'dark');
+          (root.ownerDocument ?? root).documentElement.setAttribute('data-theme', 'dark');
           closeSettings();
         },
       });
