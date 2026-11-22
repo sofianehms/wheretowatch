@@ -52,7 +52,19 @@ async function renderView() {
   }
   const issues = await check?.() ?? [];
   problems.push(...issues.map((problem) => `${view}: ${problem}`));
+  restoreInitialFocus();
   return problems;
+}
+
+// The checks move focus around; put the keyboard starting point back at the top of the page so a reviewer tabs in document order.
+function restoreInitialFocus() {
+  const sentinel = document.createElement('span');
+  sentinel.tabIndex = -1;
+  document.body.prepend(sentinel);
+  sentinel.focus();
+  sentinel.remove();
+  document.activeElement?.blur?.();
+  window.scrollTo(0, 0);
 }
 
 // Wait for imports and asynchronous renders before capturing or auditing the page.

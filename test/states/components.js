@@ -137,7 +137,8 @@ function comboboxScenario() {
   return {
     name: 'Search · combobox keyboard',
     render(container) {
-      const wrap = el('div', 'search sample-anchor');
+      container.classList.add('sample-room');
+      const wrap = el('div', 'search sample-anchor sample-anchor--live');
       const frame = el('div', 'search__field');
       const input = el('input', 'search__input', '', {
         type: 'search', role: 'combobox', 'aria-label': 'Search for a title', 'aria-autocomplete': 'list',
@@ -149,7 +150,9 @@ function comboboxScenario() {
       suggestions.forEach(([title, meta, tone, initials], index) => {
         const option = el('li', 'option', '', { role: 'option', id: `combo-option-${index}`, 'aria-selected': 'false' });
         const lines = el('span', 'option__lines');
-        lines.append(el('span', 'option__title', title), el('span', 'option__meta', meta));
+        const name = el('span', 'option__title');
+        name.append(el('mark', '', title.slice(0, 2)), title.slice(2));
+        lines.append(name, el('span', 'option__meta', meta));
         option.append(el('div', `poster ${tone}`, initials, { 'aria-hidden': 'true' }), lines);
         option.addEventListener('mousedown', (event) => event.preventDefault());
         list.append(option);
@@ -199,6 +202,14 @@ function comboboxScenario() {
       const problems = [];
       if (input.getAttribute('aria-controls') !== list.id) problems.push('the combobox does not control its listbox');
       if (input.getAttribute('aria-expanded') !== 'true') problems.push('the combobox is not expanded with suggestions');
+      if (innerWidth >= 768) {
+        const field = container.querySelector('.search__field').getBoundingClientRect();
+        const box = list.getBoundingClientRect();
+        if (getComputedStyle(list).position !== 'absolute') problems.push('the suggestions lose their production popover placement');
+        if (box.top < field.bottom - 1 || box.bottom > document.documentElement.scrollHeight || box.right > innerWidth) problems.push('the suggestion popover is misplaced or clipped');
+        if (box.left < field.left - 1 || box.right > field.right + 1) problems.push('the suggestion popover does not align with the field');
+      }
+      if (getComputedStyle(container.querySelector('.option__title mark')).textDecorationLine !== 'underline') problems.push('the matched part of a suggestion is not underlined');
       if (!container.querySelector('[role="status"]')?.textContent.includes('results available')) problems.push('the suggestion count is not announced');
       input.focus();
       press('ArrowDown');
@@ -390,7 +401,13 @@ function panelScenarios() {
         card.append(el('h3', 'section-title', 'Get a free key'), el('p', 'muted small', 'Two short steps.'));
         container.append(card);
       },
-      check: checkNoOverflow,
+      check(container) {
+        const card = container.querySelector('.card');
+        const page = getComputedStyle(document.body).backgroundColor;
+        const problems = checkNoOverflow(container);
+        if (getComputedStyle(card).backgroundColor === page) problems.push('the card surface blends into the page');
+        return problems;
+      },
     },
     {
       name: 'Panel · verdict · available, reference country first',

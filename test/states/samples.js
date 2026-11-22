@@ -30,7 +30,13 @@ const searchError = {
     const list = el('div', 'listbox', '', { role: 'alert' });
     const note = el('p', 'listbox__note');
     note.append(el('strong', '', 'Search is unavailable.'), document.createTextNode(' Something went wrong on our side.'));
-    note.append(el('button', 'btn btn--secondary', 'Try again', { type: 'button' }));
+    const retry = el('button', 'btn btn--secondary', 'Try again', { type: 'button' });
+    // The sample's own retry handler: the check clicks the real control and reads what the handler did.
+    retry.addEventListener('click', () => {
+      form.dataset.retried = String(Number(form.dataset.retried || 0) + 1);
+      list.setAttribute('aria-busy', 'true');
+    });
+    note.append(retry);
     list.append(note);
     form.append(frame, list);
     container.append(form);
@@ -40,10 +46,8 @@ const searchError = {
     const retry = container.querySelector('.listbox button');
     if (!retry || !/try again/i.test(retry.textContent) || !retry.checkVisibility({ opacityProperty: true, visibilityProperty: true })) problems.push('the search error has no visible retry action');
     else {
-      let activated = 0;
-      retry.addEventListener('click', () => { activated += 1; });
       retry.click();
-      if (activated !== 1 || retry.disabled) problems.push('the retry action cannot be activated');
+      if (container.querySelector('.search').dataset.retried !== '1' || retry.disabled) problems.push('the retry action cannot be activated');
     }
     if (!container.querySelector('.listbox[role="alert"]')) problems.push('the search error is not announced as an alert');
     return problems;

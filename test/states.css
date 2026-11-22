@@ -3,4 +3,6 @@
 .scenario-grid { display: grid; gap: var(--space-3); }
 /* Each suggestion-list sample sits in its own row: the desktop absolute placement is reset here. */
 .sample-anchor { position: relative; }
-.sample-anchor .listbox { position: static; }
+.sample-anchor:not(.sample-anchor--live) .listbox { position: static; }
+/* The live sample keeps the production popover placement; this room stops it from covering the next sample. */
+.sample-room { padding-bottom: var(--space-16); }
