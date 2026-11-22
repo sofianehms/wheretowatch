@@ -91,6 +91,24 @@ test('caches normalized queries in memory per locale for ten minutes', async () 
   assert.equal(calls[2].url.searchParams.get('language'), 'fr');
 });
 
+test('rejects pasted credentials before fetching or caching the search', async () => {
+  const { source, calls, cache } = setup([json(empty)]);
+  await assert.rejects(source.searchTitles(credential), { type: 'auth' });
+  await assert.rejects(source.searchTitles(`Glass ${credential} Garden`), { type: 'auth' });
+  assert.equal(calls.length, 0);
+  assert.equal(cache.stats().entries, 0);
+  assert.deepEqual(await source.searchTitles('Glass Garden'), []);
+  assert.equal(calls.length, 1);
+});
+
+test('rejects credentials that would be URL-encoded and queries containing api_key', async () => {
+  const encoded = 'fixture+authorization';
+  const { source, calls } = setup([], { getToken: () => encoded });
+  await assert.rejects(source.searchTitles(`Glass ${encoded}`), { type: 'auth' });
+  await assert.rejects(source.searchTitles('Glass api_key=fixture'), { type: 'auth' });
+  assert.equal(calls.length, 0);
+});
+
 test('handles blank queries, missing metadata and pre-aborted searches', async () => {
   const { source, calls } = setup([json({ results: [{ media_type: 'tv', name: 'No date' }] })]);
   assert.deepEqual(await source.searchTitles('  '), []);
