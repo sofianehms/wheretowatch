@@ -188,7 +188,7 @@ function comboboxScenario() {
         } else if (event.key === 'ArrowUp') {
           event.preventDefault();
           setOpen(true);
-          setActive((active - 1 + options.length) % options.length);
+          setActive(active < 0 ? options.length - 1 : (active - 1 + options.length) % options.length);
         } else if (event.key === 'Enter' && active >= 0) {
           event.preventDefault();
           input.value = options[active].querySelector('.option__title').textContent;
@@ -222,6 +222,9 @@ function comboboxScenario() {
       if (getComputedStyle(container.querySelector('.option__title mark')).textDecorationLine !== 'underline') problems.push('the matched part of a suggestion is not underlined');
       if (!container.querySelector('[role="status"]')?.textContent.includes('results available')) problems.push('the suggestion count is not announced');
       input.focus();
+      press('ArrowUp');
+      if (input.getAttribute('aria-activedescendant') !== `combo-option-${list.children.length - 1}`) problems.push('ArrowUp from a closed list does not open on the last option');
+      press('Escape');
       press('ArrowDown');
       if (input.getAttribute('aria-activedescendant') !== 'combo-option-0') problems.push('ArrowDown does not activate the first option');
       press('ArrowDown');
@@ -316,6 +319,9 @@ function searchStateScenarios() {
           const problems = [];
           if (input.value !== '') problems.push(`the clear button left "${input.value}" in the field`);
           if (document.activeElement !== input) problems.push('focus does not return to the search field after clearing');
+          // Restore the populated state so the capture shows the field with its clear button.
+          input.value = 'dune';
+          container.querySelector('button[aria-label="Clear the search"]').hidden = false;
           return problems;
         },
       }],
