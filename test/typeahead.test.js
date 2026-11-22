@@ -117,6 +117,33 @@ test('submitting an unchanged settled query keeps its original request', async (
   assert.deepEqual(states.at(-1), { status: 'empty', query: 'dune', titles: [] });
 });
 
+test('an explicit submit retries the same query after an offline error', async (t) => {
+  const { input, submit, tick, calls, states } = setup(t);
+  const offline = new HttpError('offline');
+  submit('dune');
+  calls[0].reject(offline);
+  await Promise.resolve();
+
+  input(' dune ');
+  tick(275);
+  assert.equal(calls.length, 1);
+
+  submit(' dune ');
+  assert.deepEqual(calls.map(({ query }) => query), ['dune', 'dune']);
+  submit('dune');
+  const titles = [{ title: 'Dune' }];
+  calls[1].resolve(titles);
+  await Promise.resolve();
+  submit('dune');
+  assert.equal(calls.length, 2);
+  assert.deepEqual(states, [
+    { status: 'loading', query: 'dune' },
+    { status: 'error', query: 'dune', error: offline },
+    { status: 'loading', query: 'dune' },
+    { status: 'results', query: 'dune', titles },
+  ]);
+});
+
 test('an edit suppresses a stale response even while the replacement is settling', async (t) => {
   const { input, submit, calls, states } = setup(t);
   submit('old');

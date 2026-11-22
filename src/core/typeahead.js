@@ -25,6 +25,7 @@ export function createTypeahead({
   let timer;
   let active;
   let settledQuery;
+  let searchFailed = false;
   let sequence = 0;
   let composition;
 
@@ -49,6 +50,7 @@ export function createTypeahead({
     const controller = new AbortController();
     active = controller;
     settledQuery = query;
+    searchFailed = false;
     onState({ status: 'loading', query });
     if (current !== sequence) return;
 
@@ -64,7 +66,9 @@ export function createTypeahead({
     } finally {
       if (active === controller) active = undefined;
     }
-    if (current === sequence) onState(state);
+    if (current !== sequence) return;
+    searchFailed = state.status === 'error';
+    onState(state);
   }
 
   function reset() {
@@ -81,7 +85,7 @@ export function createTypeahead({
       reset();
       return;
     }
-    if (query === settledQuery) return;
+    if (query === settledQuery && !(immediate && searchFailed)) return;
     settledQuery = undefined;
     const current = invalidate();
     if (immediate) {
