@@ -1,4 +1,5 @@
 const defaultBase = 'https://image.tmdb.org/t/p/';
+const forbiddenUrlText = /api_key|original/i;
 const posterCandidates = {
   thumb: [['w92', '1x'], ['w154', '2x'], ['w185', '3x']],
   detail: [['w342', '1x'], ['w500', '3x']],
@@ -6,7 +7,7 @@ const posterCandidates = {
 
 function secureBase(value) {
   // Use the HTTPS image origin permitted by the application's CSP.
-  return /^https:\/\/image\.tmdb\.org\/(?:[\w-]+\/)+$/.test(value) && !/original/i.test(value)
+  return /^https:\/\/image\.tmdb\.org\/(?:[\w-]+\/)+$/.test(value) && !forbiddenUrlText.test(value)
     ? value : defaultBase;
 }
 
@@ -18,7 +19,7 @@ function secureBase(value) {
  * @returns {{src: string, srcset: string}|null}
  */
 export function posterSrcset(path, variant, configuration) {
-  if (!path || !/^\/[\w-]+\.[a-z0-9]+$/i.test(path) || /original/i.test(path)) return null;
+  if (!path || !/^\/[\w-]+\.[a-z0-9]+$/i.test(path) || forbiddenUrlText.test(path)) return null;
   const expected = posterCandidates[variant];
   const available = configuration?.poster_sizes;
   const supported = Array.isArray(available)

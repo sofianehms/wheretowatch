@@ -52,3 +52,18 @@ test('returns null for absent or invalid poster paths', () => {
     assert.equal(posterSrcset(invalid, 'thumb'), null);
   }
 });
+
+test('falls back when a configured base path contains api_key', () => {
+  const fallback = posterSrcset(path, 'detail');
+  for (const segment of ['api_key', 'API_KEY']) {
+    assert.deepEqual(posterSrcset(path, 'detail', {
+      secure_base_url: `https://image.tmdb.org/${segment}/`,
+    }), fallback);
+  }
+});
+
+test('returns null when a poster filename contains api_key', () => {
+  for (const filename of ['/api_key.jpg', '/poster-API_KEY.jpg']) {
+    assert.equal(posterSrcset(filename, 'thumb'), null);
+  }
+});
