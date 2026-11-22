@@ -110,8 +110,15 @@ export function createSettings({
 
   return {
     getKey,
-    setKey(provider, value) {
+    /**
+     * Save a key. Pass `{ verified: false }` when the key could not be checked, so Settings
+     * still shows that after a reload.
+     */
+    setKey(provider, value, { verified = true } = {}) {
       write(storageName(providers, provider, 'key.'), value);
+      const flag = storageName(providers, provider, 'unverified.');
+      if (verified) remove(flag);
+      else write(flag, '1');
       if (!persistenceRequested) {
         persistenceRequested = true;
         void requestPersistence();
@@ -119,7 +126,9 @@ export function createSettings({
     },
     removeKey(provider) {
       remove(storageName(providers, provider, 'key.'));
+      remove(storageName(providers, provider, 'unverified.'));
     },
+    isUnverified: (provider) => Boolean(getKey(provider)) && read(storageName(providers, provider, 'unverified.')) === '1',
     hasKey: (provider) => Boolean(getKey(provider)),
     getPref(name) {
       return read(storageName(preferences, name)) ?? defaults[name];

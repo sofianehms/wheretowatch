@@ -37,11 +37,14 @@ function memoryStorage() {
  * @param {() => number} [options.now]
  */
 export function compose({
-  storage = browserStorage() ?? memoryStorage(),
+  storage = browserStorage(),
   navigatorLike = globalThis.navigator,
   adapters = [],
   now = Date.now,
 } = {}) {
+  // Without browser storage the services run on memory: nothing survives the visit.
+  const durable = storage !== undefined;
+  if (!durable) storage = memoryStorage();
   const store = createStore();
   const cache = createCache({ storage, now });
   const quota = createQuota({ storage, now });
@@ -59,6 +62,7 @@ export function compose({
     quota,
     settings,
     sources,
+    durable,
     checkKey,
     quotaLimit: () => quota.status().limit,
   };

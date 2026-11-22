@@ -28,7 +28,7 @@ function memoryStorage(initial = {}) {
   };
 }
 
-function mount(container, { stored = {}, check = async () => 'valid', onCleared } = {}) {
+function mount(container, { stored = {}, check = async () => 'valid', onCleared, durable } = {}) {
   container.checks = [];
   const run = check;
   check = (provider, value, deps) => {
@@ -47,6 +47,7 @@ function mount(container, { stored = {}, check = async () => 'valid', onCleared 
     settings,
     checkKey: check,
     quotaLimit: () => quota.status().limit,
+    durable,
     onCleared,
   });
   container.append(root);
@@ -122,18 +123,69 @@ const scenarios = [
   {
     name: 'Settings · masked input',
     render(container) {
-      mount(container, { stored: { 'wtw.key.tmdb': sampleKey } });
+      mount(container, { stored: { 'wtw.key.tmdb': sampleKey, 'wtw.key.sa': sampleKey } });
     },
     check(container) {
       const problems = checkFields(container);
-      const input = fieldOf(container, 'tmdb');
-      const toggle = input.nextElementSibling;
-      if (input.type !== 'password') problems.push('the saved key is not masked');
-      if (statusOf(input).textContent !== 'Saved on this device.') problems.push('the saved key shows no saved status');
-      toggle.click();
-      if (input.type !== 'text' || toggle.getAttribute('aria-pressed') !== 'true' || toggle.textContent !== 'Hide') problems.push('Show does not reveal the key');
-      toggle.click();
-      if (input.type !== 'password' || toggle.getAttribute('aria-pressed') !== 'false') problems.push('Hide does not mask the key again');
+      for (const provider of ['tmdb', 'sa']) {
+        const input = fieldOf(container, provider);
+        const toggle = input.nextElementSibling;
+        if (input.type !== 'password') problems.push(`the saved ${provider} key is not masked`);
+        if (statusOf(input).textContent !== 'Saved on this device.') problems.push(`the saved ${provider} key shows no saved status`);
+        toggle.click();
+        if (input.type !== 'text' || toggle.getAttribute('aria-pressed') !== 'true' || toggle.textContent !== 'Hide') problems.push(`Show does not reveal the ${provider} key`);
+        toggle.click();
+        if (input.type !== 'password' || toggle.getAttribute('aria-pressed') !== 'false') problems.push(`Hide does not mask the ${provider} key again`);
+      }
+      return problems;
+    },
+  },
+  {
+    name: 'Settings · an unchecked key stays marked after reopening',
+    async render(container) {
+      const first = mount(container, { check: async () => 'network' });
+      type(fieldOf(first.root, 'tmdb'), sampleKey);
+      buttonNamed(first.root, 'Save').click();
+      await settle();
+      // Reopen Settings on the same storage, as after a reload.
+      container.replaceChildren();
+      mount(container, { stored: { 'wtw.key.tmdb': sampleKey, 'wtw.unverified.tmdb': '1' } });
+    },
+    check(container) {
+      const problems = checkFields(container);
+      const state = statusOf(fieldOf(container, 'tmdb'));
+      if (!state.textContent.includes('not checked yet. Press Test')) problems.push('the unchecked outcome is lost after reopening');
+      if (state.classList.contains('key-state--ok')) problems.push('an unchecked key shows a success look');
+      return problems;
+    },
+  },
+  {
+    name: 'Settings · testing a saved unchecked key clears the mark',
+    async render(container) {
+      const { storage } = mount(container, { stored: { 'wtw.key.tmdb': sampleKey, 'wtw.unverified.tmdb': '1' } });
+      container.storage = storage;
+      buttonNamed(container, 'Test').click();
+      await settle();
+    },
+    check(container) {
+      const problems = checkFields(container);
+      if (statusOf(fieldOf(container, 'tmdb')).textContent !== 'Saved on this device.') problems.push('a verified key is not reported as saved');
+      if (container.storage.getItem('wtw.unverified.tmdb') !== null) problems.push('the unchecked mark stays after a successful test');
+      return problems;
+    },
+  },
+  {
+    name: 'Settings · a key kept only for this visit says so',
+    async render(container) {
+      mount(container, { durable: false });
+      type(fieldOf(container, 'tmdb'), sampleKey);
+      buttonNamed(container, 'Save').click();
+      await settle();
+    },
+    check(container) {
+      const problems = checkFields(container);
+      if (!container.textContent.includes('Your browser blocks storage')) problems.push('the storage warning is missing');
+      if (statusOf(fieldOf(container, 'tmdb')).textContent !== 'Kept for this visit only.') problems.push('a temporary key is reported as saved on the device');
       return problems;
     },
   },

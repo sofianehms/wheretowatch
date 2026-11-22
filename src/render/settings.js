@@ -18,17 +18,20 @@ const statusLook = {
 };
 const providerSpecific = new Set(['invalid', 'quota']);
 
-function statusText(status, provider) {
-  const key = providerSpecific.has(status) ? `settings.status.${status}.${provider}` : `settings.status.${status}`;
+function statusText(status, provider, durable) {
+  let key = providerSpecific.has(status) ? `settings.status.${status}.${provider}` : `settings.status.${status}`;
+  if (!durable && (status === 'saved' || status === 'unverified')) key += '.session';
   return t(key, { provider: t(`settings.${provider}.name`) });
 }
 
-function keyField({ provider, settings, checkKey, quotaLimit, onChange, onUpdate = () => {} }) {
+function keyField({ provider, settings, checkKey, quotaLimit, durable, onChange, onUpdate = () => {} }) {
   const id = uniqueId(`key-${provider}`);
   const stateId = `${id}-state`;
   const helpId = `${id}-help`;
   let saved = settings.getKey(provider) ?? '';
-  let status = saved ? 'saved' : 'empty';
+  // A saved key whose last check failed keeps that status until it is tested again.
+  const savedStatus = () => (settings.isUnverified(provider) ? 'unverified' : 'saved');
+  let status = saved ? savedStatus() : 'empty';
   let controller = null;
   let busy = false;
   // The last value that was tested and its result, so a tested key is not checked again on Save.
@@ -72,7 +75,7 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange, onUpdate
   const value = () => input.value.trim();
 
   function idleStatus() {
-    if (value() === saved) return saved ? 'saved' : 'empty';
+    if (value() === saved) return saved ? savedStatus() : 'empty';
     return 'edit';
   }
 
@@ -83,7 +86,7 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange, onUpdate
     if (status !== 'empty') {
       const [tone, iconName] = statusLook[status];
       state.classList.add(`key-state--${tone}`);
-      state.append(icon(iconName, 'sm'), statusText(status, provider));
+      state.append(icon(iconName, 'sm'), statusText(status, provider, durable));
     }
     // aria-disabled keeps the buttons focusable, so keyboard focus is never dropped.
     test.setAttribute('aria-disabled', String(busy || !value()));
@@ -126,7 +129,15 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange, onUpdate
     if (test.getAttribute('aria-disabled') === 'true') return;
     const result = await runCheck();
     if (!result) return;
-    status = result === 'valid' && value() === saved ? 'saved' : result;
+    const verifiedSaved = result === 'valid' && value() === saved;
+    if (verifiedSaved) {
+      try {
+        settings.setKey(provider, saved);
+      } catch {
+        // The key stays saved; only the unchecked mark could not be cleared.
+      }
+    }
+    status = verifiedSaved ? 'saved' : result;
     update();
     // A saved key that is now verified ends the first run.
     if (status === 'saved') onChange(provider, status);
@@ -149,7 +160,7 @@ function keyField({ provider, settings, checkKey, quotaLimit, onChange, onUpdate
       if (result !== 'valid') note = 'unverified';
     }
     try {
-      if (entered) settings.setKey(provider, entered);
+      if (entered) settings.setKey(provider, entered, { verified: note === null });
       else settings.removeKey(provider);
     } catch {
       status = 'failed';
@@ -230,11 +241,13 @@ export function renderClearDialog({ onCancel, onConfirm }) {
  * @param {ReturnType<typeof import('../settings/keys.js').createSettings>} options.settings
  * @param {(provider: 'tmdb'|'sa', value: string, deps: {signal: AbortSignal}) => Promise<string>} options.checkKey
  * @param {() => number} [options.quotaLimit] Monthly call limit of the optional source.
- * @param {(provider: string) => void} [options.onChange] Called after a key is saved or removed.
+ * @param {boolean} [options.durable] False when keys last only for this visit; Settings then says so.
+ * @param {(provider: 'tmdb'|'sa', outcome: string) => void} [options.onChange] Called after a key is saved,
+ *   removed or verified; `outcome` is `saved`, `unverified` or `removed`.
  * @param {() => void} [options.onCleared] Called after all data has been cleared.
  * @returns {HTMLElement} The screen; its `dispose()` cancels any pending key check or save.
  */
-export function renderSettings({ settings, checkKey, quotaLimit, onChange = () => {}, onCleared = () => {} }) {
+export function renderSettings({ settings, checkKey, quotaLimit, durable = true, onChange = () => {}, onCleared = () => {} }) {
   const root = el('div', 'settings');
 
   const keysId = uniqueId('settings-keys');
@@ -250,8 +263,8 @@ export function renderSettings({ settings, checkKey, quotaLimit, onChange = () =
       if (field) field.save.className = field === first ? 'btn btn--primary' : 'btn btn--secondary';
     }
   };
-  tmdb = keyField({ provider: 'tmdb', settings, checkKey, quotaLimit, onChange, onUpdate: markPrimary });
-  sa = keyField({ provider: 'sa', settings, checkKey, quotaLimit, onChange, onUpdate: markPrimary });
+  tmdb = keyField({ provider: 'tmdb', settings, checkKey, quotaLimit, durable, onChange, onUpdate: markPrimary });
+  sa = keyField({ provider: 'sa', settings, checkKey, quotaLimit, durable, onChange, onUpdate: markPrimary });
   markPrimary();
   keys.append(
     heading,
@@ -261,6 +274,7 @@ export function renderSettings({ settings, checkKey, quotaLimit, onChange = () =
     externalLink(t('settings.sa.url'), t('settings.sa.create')),
     el('p', 'field__help', t('settings.keys.terms')),
   );
+  if (!durable) keys.insertBefore(el('p', 'key-state key-state--edit', t('settings.keys.session'), { role: 'status' }), tmdb.field);
 
   const data = el('section', '', '', { 'aria-labelledby': dataId });
   const prose = el('div', 'prose');

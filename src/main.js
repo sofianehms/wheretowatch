@@ -62,10 +62,11 @@ function render(state) {
       settings,
       checkKey: app.checkKey,
       quotaLimit: app.quotaLimit,
+      durable: app.durable,
       // The first saved key ends the first run: go back to search.
       onChange: (provider, outcome) => {
         // An unverified key stays on screen so the user can read the outcome and test again.
-        if (firstRun && settings.hasKey('tmdb') && outcome !== 'unverified') closeSettings();
+        if (provider === 'tmdb' && firstRun && settings.hasKey('tmdb') && outcome !== 'unverified') closeSettings();
       },
       onCleared: () => {
         // Erasure also forgets the query typed before, so the next key starts from a blank search.
