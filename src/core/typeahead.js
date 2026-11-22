@@ -1,7 +1,23 @@
+import { HttpError } from '../api/http.js';
+
+/** @typedef {import('../api/sources.js').Title} Title */
+
 /**
- * search(query, { signal }) may return a title array or the source router's
- * { titles, error } result. States carry a status and, when applicable, the
- * trimmed query, titles or HttpError.
+ * @typedef {Title[] | {titles: Title[], error?: unknown}} SearchResult
+ * @typedef {(query: string, options: {signal: AbortSignal}) => SearchResult | Promise<SearchResult>} Search
+ * @typedef {{status: 'idle'} |
+ *   {status: 'loading', query: string} |
+ *   {status: 'results' | 'empty', query: string, titles: Title[]} |
+ *   {status: 'error', query: string, error: HttpError}} TypeaheadState
+ */
+
+/**
+ * @param {object} options
+ * @param {Search} options.search Receives the trimmed query and its cancellation signal.
+ * @param {(state: TypeaheadState) => void} options.onState Unexpected search failures use the network error type.
+ * @param {number} [options.delayMs=275]
+ * @param {number} [options.minChars=2]
+ * @param {Pick<typeof globalThis, 'setTimeout' | 'clearTimeout'>} [options.timers]
  */
 export function createTypeahead({
   search, onState, delayMs = 275, minChars = 2, timers = globalThis,
@@ -34,14 +50,15 @@ export function createTypeahead({
     onState({ status: 'loading', query });
     if (current !== sequence) return;
 
+    /** @type {TypeaheadState} */
     let state;
     try {
       const result = await search(query, { signal: controller.signal });
-      const { titles = result, error } = result;
-      if (error) throw error;
+      if (!Array.isArray(result) && result.error != null) throw result.error;
+      const titles = Array.isArray(result) ? result : result.titles;
       state = { status: titles.length ? 'results' : 'empty', query, titles };
     } catch (error) {
-      state = { status: 'error', query, error };
+      state = { status: 'error', query, error: error instanceof HttpError ? error : new HttpError('network') };
     } finally {
       if (active === controller) active = undefined;
     }
