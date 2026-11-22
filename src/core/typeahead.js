@@ -24,8 +24,9 @@ export function createTypeahead({
 }) {
   let timer;
   let active;
+  let settledQuery;
   let sequence = 0;
-  let composing = false;
+  let composition;
 
   function invalidate() {
     sequence += 1;
@@ -47,6 +48,7 @@ export function createTypeahead({
     if (current !== sequence) return;
     const controller = new AbortController();
     active = controller;
+    settledQuery = query;
     onState({ status: 'loading', query });
     if (current !== sequence) return;
 
@@ -67,17 +69,20 @@ export function createTypeahead({
 
   function reset() {
     const current = invalidate();
+    settledQuery = undefined;
     abortActive();
     if (current === sequence) onState({ status: 'idle' });
   }
 
   function update(value, immediate = false) {
-    if (composing) return;
+    if (composition) return;
     const query = value.trim();
     if ([...query].length < minChars) {
       reset();
       return;
     }
+    if (query === settledQuery) return;
+    settledQuery = undefined;
     const current = invalidate();
     if (immediate) {
       void run(query, current);
@@ -89,14 +94,18 @@ export function createTypeahead({
   return {
     input: (value) => update(value),
     compositionStart() {
-      composing = true;
+      composition = 'active';
       reset();
     },
     compositionEnd(value) {
-      composing = false;
-      update(value);
+      const finished = composition;
+      composition = undefined;
+      if (finished === 'active') update(value);
     },
     submit: (value) => update(value, true),
-    cancel: reset,
+    cancel() {
+      if (composition) composition = 'cancelled';
+      reset();
+    },
   };
 }

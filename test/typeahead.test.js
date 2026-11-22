@@ -84,6 +84,39 @@ test('a settled replacement aborts the prior request and ignores its late respon
   assert.deepEqual(states.at(-1), { status: 'empty', query: 'new', titles: [] });
 });
 
+test('cancel discards the rest of the current IME composition', (t) => {
+  const { input, compositionStart, compositionEnd, submit, cancel, tick, calls } = setup(t);
+  compositionStart();
+  cancel();
+  input('日本');
+  submit('日本');
+  compositionEnd('日本');
+  tick(1000);
+  assert.equal(calls.length, 0);
+
+  input('日本');
+  tick(275);
+  assert.deepEqual(calls.map(({ query }) => query), ['日本']);
+});
+
+test('submitting an unchanged settled query keeps its original request', async (t) => {
+  const { input, submit, tick, calls, states } = setup(t);
+  input('dune');
+  tick(275);
+  submit(' dune ');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].signal.aborted, false);
+  assert.deepEqual(states, [{ status: 'loading', query: 'dune' }]);
+
+  calls[0].resolve([]);
+  await Promise.resolve();
+  input('dune');
+  submit('dune');
+  tick(275);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(states.at(-1), { status: 'empty', query: 'dune', titles: [] });
+});
+
 test('an edit suppresses a stale response even while the replacement is settling', async (t) => {
   const { input, submit, calls, states } = setup(t);
   submit('old');
@@ -149,7 +182,7 @@ test('submit starts immediately, replaces pending input and respects the configu
   const { input, submit, tick, calls, states, timers } = setup(t, { delayMs: 80, minChars: 3 });
   submit(' 🎬a ');
   assert.deepEqual(states.at(-1), { status: 'idle' });
-  input('first');
+  input('second');
   tick(79);
   assert.equal(calls.length, 0);
   submit(' second ');
