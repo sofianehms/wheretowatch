@@ -11,7 +11,8 @@ const ignoredDirectories = new Set(['.git', '.verify', 'node_modules']);
 function* moduleFiles(directory = '') {
   for (const entry of readdirSync(join(repository, directory), { withFileTypes: true })) {
     const path = directory ? `${directory}/${entry.name}` : entry.name;
-    if (entry.isDirectory() && !ignoredDirectories.has(entry.name) && path !== 'src/api') {
+    // Hidden directories hold tooling and scratch data (other tests create `.probe-test-*` here while this one runs).
+    if (entry.isDirectory() && !entry.name.startsWith('.') && !ignoredDirectories.has(entry.name) && path !== 'src/api') {
       yield* moduleFiles(path);
     } else if (entry.isFile() && /\.[cm]?js$/.test(entry.name)) {
       yield path;
