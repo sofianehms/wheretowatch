@@ -78,7 +78,7 @@ h1 { font-size: var(--text-xl); }
 .btn:active { transform: scale(var(--press-scale)); }
 .btn--lg { min-height: var(--tap-size-lg); }
 .btn--block { width: 100%; }
-.btn--primary { background: var(--color-accent); color: var(--color-accent-text); }
+.btn--primary { min-height: var(--tap-size-lg); background: var(--color-accent); color: var(--color-accent-text); }
 .btn--primary:hover { background: var(--color-accent-hover); }
 .btn--primary:active { background: var(--color-accent-pressed); }
 .btn--secondary { background: transparent; color: var(--color-text); border-color: var(--color-border-strong); }
@@ -183,6 +183,7 @@ p .link, li .link--inline { display: inline; min-height: 0; } /* links inside a 
 }
 .pill--confirmed { color: var(--color-positive); }
 .pill--disagree { color: var(--color-caution); }
+.pill--single { color: var(--color-text); }
 
 /* ---------- Wider screens ---------- */
 @media (min-width: 48rem) {

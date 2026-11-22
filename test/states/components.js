@@ -34,6 +34,7 @@ function buttonScenarios() {
       const button = container.querySelector('.btn');
       const problems = [...checkFocusRing(container), ...checkHover(container), ...checkNoOverflow(container)];
       if (variant === 'normal') problems.push(...checkResting(button, resting));
+      if (kind === 'primary' && button.getBoundingClientRect().height < parseFloat(resolveToken('--tap-size-lg', 'min-height'))) problems.push('the primary button is not at the 48 px primary height');
       if (variant === 'hover' && kind === 'primary') problems.push(...checkResting(button, { color: '--color-accent-text' }));
       if (variant === 'disabled') {
         problems.push(...checkDisabledControl(button));
@@ -121,6 +122,11 @@ function searchBox({ value = '', disabled = false } = {}) {
   if (value && !disabled) {
     const clear = el('button', 'icon-btn', '', { type: 'button', 'aria-label': 'Clear the search' });
     clear.append(icon('close'));
+    clear.addEventListener('click', () => {
+      input.value = '';
+      clear.hidden = true;
+      input.focus();
+    });
     frame.append(clear);
   }
   form.append(frame);
@@ -188,6 +194,8 @@ function comboboxScenario() {
           input.value = options[active].querySelector('.option__title').textContent;
           setOpen(false);
         } else if (event.key === 'Escape') {
+          // The native search field clears itself on Escape; keep the value until the list is already closed.
+          event.preventDefault();
           if (!list.hidden) setOpen(false);
           else input.value = '';
         } else if (event.key === 'Tab') {
@@ -207,6 +215,8 @@ function comboboxScenario() {
         const box = list.getBoundingClientRect();
         if (getComputedStyle(list).position !== 'absolute') problems.push('the suggestions lose their production popover placement');
         if (box.top < field.bottom - 1 || box.bottom > document.documentElement.scrollHeight || box.right > innerWidth) problems.push('the suggestion popover is misplaced or clipped');
+        const next = container.closest('section')?.nextElementSibling?.querySelector('h2');
+        if (next && box.bottom > next.getBoundingClientRect().top) problems.push('the suggestion popover covers the next scenario');
         if (box.left < field.left - 1 || box.right > field.right + 1) problems.push('the suggestion popover does not align with the field');
       }
       if (getComputedStyle(container.querySelector('.option__title mark')).textDecorationLine !== 'underline') problems.push('the matched part of a suggestion is not underlined');
@@ -238,6 +248,36 @@ function comboboxScenario() {
       press('ArrowUp');
       return [...problems, ...checkNoOverflow(container)];
     },
+    // Trusted key presses sent by the verify runner, since the native Escape action cannot be reproduced with synthetic events.
+    realKeys: [
+      {
+        before(container) {
+          const input = container.querySelector('[role="combobox"]');
+          input.value = 'dun';
+          input.focus();
+        },
+        keys: ['Escape'],
+        after(container) {
+          const input = container.querySelector('[role="combobox"]');
+          const problems = [];
+          if (!container.querySelector('[role="listbox"]').hidden) problems.push('the first real Escape does not close the list');
+          if (input.value !== 'dun') problems.push(`the first real Escape changed the value to "${input.value}"`);
+          return problems;
+        },
+      },
+      {
+        keys: ['Escape'],
+        after(container) {
+          const input = container.querySelector('[role="combobox"]');
+          const problems = input.value === '' ? [] : ['the second real Escape does not clear the field'];
+          // Leave the sample open again for the capture.
+          input.value = 'dun';
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+          return problems;
+        },
+      },
+    ],
   };
 }
 
@@ -266,6 +306,19 @@ function searchStateScenarios() {
       check(container) {
         return container.querySelector('button[aria-label="Clear the search"]') ? checkNoOverflow(container) : ['the populated search has no clear button'];
       },
+      realKeys: [{
+        before(container) {
+          container.querySelector('button[aria-label="Clear the search"]').focus();
+        },
+        keys: ['Enter'],
+        after(container) {
+          const input = container.querySelector('.search__input');
+          const problems = [];
+          if (input.value !== '') problems.push(`the clear button left "${input.value}" in the field`);
+          if (document.activeElement !== input) problems.push('focus does not return to the search field after clearing');
+          return problems;
+        },
+      }],
     },
     {
       name: 'Search · loading',
@@ -313,10 +366,12 @@ function pillScenarios() {
   const pills = [
     ['confirmed', 'check', 'Confirmed by both sources'],
     ['disagree', 'alert', 'Sources disagree'],
+    ['single', 'info', 'JustWatch only'],
+    ['single', 'external', 'Movie of the Night only'],
   ];
   return [
     ...pills.map(([kind, iconName, text]) => ({
-      name: `Pill · ${kind}`,
+      name: `Pill · ${text}`,
       render(container) {
         const pill = el('span', `pill pill--${kind}`);
         pill.append(icon(iconName, 'sm'), text);
@@ -324,7 +379,7 @@ function pillScenarios() {
       },
     })),
     {
-      name: 'Pill · confirmed and disagree are told apart without color',
+      name: 'Pill · every variant is told apart without color',
       render(container) {
         const wrap = el('div', 'btn-row');
         for (const [kind, iconName, text] of pills) {
@@ -335,11 +390,16 @@ function pillScenarios() {
         container.append(wrap);
       },
       check(container) {
-        const [confirmed, disagree] = container.querySelectorAll('.pill');
+        const rendered = [...container.querySelectorAll('.pill')];
         const problems = [];
-        if (confirmed.textContent === disagree.textContent) problems.push('the pills share one label');
-        if (confirmed.querySelector('path').getAttribute('d') === disagree.querySelector('path').getAttribute('d')) {
-          problems.push('the pills share one icon');
+        if (rendered.length !== pills.length) problems.push('a pill variant is missing');
+        rendered.forEach((pill, index) => {
+          if (pill.textContent !== pills[index][2]) problems.push(`the pill "${pills[index][2]}" shows "${pill.textContent}"`);
+          if (!pill.checkVisibility() || !pill.querySelector('svg path')) problems.push(`the pill "${pills[index][2]}" has no visible icon or label`);
+        });
+        for (const field of ['textContent', 'icon']) {
+          const values = rendered.map((pill) => (field === 'icon' ? pill.querySelector('path').getAttribute('d') : pill.textContent));
+          if (new Set(values).size !== values.length) problems.push(`two pills share one ${field === 'icon' ? 'icon' : 'label'}`);
         }
         return problems;
       },

@@ -16,6 +16,9 @@ function checkTargets(container) {
   return problems;
 }
 
+// Steps the verify runner replays with trusted key presses (see scripts/verify.mjs).
+const keySteps = [];
+
 async function renderView() {
   const view = new URLSearchParams(location.search).get('view');
   if (!view || !/^[a-z][a-z0-9-]*$/.test(view)) return ['Choose a valid states view.'];
@@ -25,6 +28,7 @@ async function renderView() {
   const list = document.querySelector('#scenarios');
   const problems = [];
   const rendered = [];
+  window.statesKeySteps = keySteps;
   for (const scenario of scenarios) {
     const section = document.createElement('section');
     const heading = document.createElement('h2');
@@ -42,6 +46,7 @@ async function renderView() {
 
   await document.fonts.ready;
   for (const { scenario, container } of rendered) {
+    if (scenario.realKeys) keySteps.push(...scenario.realKeys.map((step) => ({ ...step, container })));
     problems.push(...checkTargets(container).map((problem) => `${scenario.name}: ${problem}`));
     try {
       const issues = await scenario.check?.(container) ?? [];
@@ -68,4 +73,9 @@ function restoreInitialFocus() {
 }
 
 // Wait for imports and asynchronous renders before capturing or auditing the page.
+window.statesRunKeyStep = async (index, phase) => {
+  const step = keySteps[index];
+  if (phase === 'before') return step.before?.(step.container) ?? [];
+  return step.after(step.container);
+};
 window.statesReady = renderView().catch((error) => [error.message]);
