@@ -93,6 +93,13 @@ async function checkStates(page, report) {
   const problems = await page.evaluate(() => window.statesReady);
   if (!problems) report('states page did not initialize');
   else problems.forEach(report);
+  // Steps that need trusted key presses (native default actions): the page prepares, we press, the page asserts.
+  const steps = await page.evaluate(() => window.statesKeySteps?.map((step) => step.keys) ?? []);
+  for (const [index, keys] of steps.entries()) {
+    await page.evaluate((i) => window.statesRunKeyStep(i, 'before'), index);
+    for (const key of keys) await page.keyboard.press(key);
+    (await page.evaluate((i) => window.statesRunKeyStep(i, 'after'), index)).forEach(report);
+  }
 }
 
 async function checkSubpath() {

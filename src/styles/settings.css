@@ -1,0 +1,16 @@
+/* ---------- Settings ---------- */
+.subpage-head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) 0; }
+.subpage-head h1 { font-size: var(--text-lg); font-weight: var(--weight-bold); color: var(--color-text-strong); }
+.settings { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-8); margin-top: var(--space-2); }
+.settings section { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+.settings h2 { font-size: var(--text-md); font-weight: var(--weight-bold); color: var(--color-text-strong); }
+.settings h3 { font-size: var(--text-base); font-weight: var(--weight-bold); color: var(--color-text-strong); }
+.usage { display: grid; gap: var(--space-2); padding: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); }
+.meter { display: grid; gap: var(--space-2); font-size: var(--text-sm); }
+.meter__bar { height: var(--space-2); border-radius: var(--radius-sm); background: var(--color-surface-raised); overflow: hidden; }
+.usage .meter__bar { background: var(--color-bg); }
+.meter__fill { width: 0; height: 100%; background: var(--color-text-muted); }
+.meter--caution .meter__fill { background: var(--color-caution); }
+.state-sheet { display: grid; gap: var(--space-6); }
+.state-sheet__label, .settings .state-sheet__label { font-size: var(--text-xs); font-weight: var(--weight-bold); text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--color-text-muted); }
+

@@ -1,0 +1,8 @@
+/* Layout helpers for the states page. Interaction states come from the production rules (see states-sim.js). */
+.scenario-note { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--color-text-muted); }
+.scenario-grid { display: grid; gap: var(--space-3); }
+/* Each suggestion-list sample sits in its own row: the desktop absolute placement is reset here. */
+.sample-anchor { position: relative; }
+.sample-anchor:not(.sample-anchor--live) .listbox { position: static; }
+/* The live sample keeps the production popover placement; this room stops it from covering the next sample. */
+.sample-room { padding-bottom: calc(var(--space-16) * 3); }
