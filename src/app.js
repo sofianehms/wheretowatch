@@ -83,7 +83,8 @@ export function startApp(app, root = document) {
     // Move the keyboard and screen reader position to the new screen, but not on first load.
     const target = shown === null ? null : root.querySelector('[data-focus-target]');
     if (target) {
-      target.tabIndex = -1;
+      // A heading needs tabindex="-1" to receive focus; a native control (the search field) must stay in the Tab order.
+      if (!target.matches('a[href], button, input, select, textarea, summary, [tabindex]')) target.tabIndex = -1;
       target.focus();
     }
     shown = view;

@@ -287,6 +287,46 @@ const scenarios = [
     },
   },
   {
+    name: 'Settings · saving checks the key again after a network failure',
+    async render(container) {
+      const outcomes = ['network', 'valid'];
+      const { storage } = mount(container, { check: async () => outcomes.shift() ?? 'valid' });
+      container.storage = storage;
+      type(fieldOf(container, 'tmdb'), sampleKey);
+      buttonNamed(container, 'Test').click();
+      await settle();
+      buttonNamed(container, 'Save').click();
+      await settle();
+    },
+    check(container) {
+      const problems = checkFields(container);
+      if (container.checks.length !== 2) problems.push(`the key was checked ${container.checks.length} times, expected 2`);
+      if (container.storage.getItem('wtw.key.tmdb') !== sampleKey) problems.push('the key is not saved');
+      if (container.storage.getItem('wtw.unverified.tmdb') !== null) problems.push('the key stays marked unchecked after a successful check');
+      return problems;
+    },
+  },
+  {
+    name: 'Settings · the search field stays in the Tab order after leaving Settings',
+    async render(container) {
+      const app = mountApp(container, { stored: { 'wtw.key.tmdb': sampleKey } });
+      container.app = app;
+      container.querySelector('#header .icon-btn').click();
+      await settle();
+      container.querySelector('#header .icon-btn').click();
+      await settle();
+      // A heading made focusable by the shell is not an interactive target for the 44 px check.
+      container.querySelector('h1[data-focus-target]')?.removeAttribute('tabindex');
+    },
+    check(container) {
+      const problems = [];
+      if (shown(container) !== 'search-view') problems.push(`the screen is ${shown(container)}, not the search`);
+      const input = container.querySelector('#q');
+      if (input.tabIndex < 0) problems.push('the search field was taken out of the Tab order');
+      return problems;
+    },
+  },
+  {
     name: 'Settings · one primary action at a time',
     render(container) {
       mount(container);

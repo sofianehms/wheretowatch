@@ -150,7 +150,9 @@ function keyField({ provider, settings, checkKey, quotaLimit, durable, onChange,
     if (entered) {
       // Both keys are checked before they are kept (the optional one costs one call of its
       // monthly quota); a value just tested is not checked again. A network failure still saves it.
-      const result = tested?.value === entered ? tested.result : await runCheck();
+      // Only a definitive result is reused; a network failure is checked again now.
+      const reusable = tested?.value === entered && (tested.result === 'valid' || tested.result === 'invalid');
+      const result = reusable ? tested.result : await runCheck();
       if (!result) return;
       if (result === 'invalid') {
         status = result;
