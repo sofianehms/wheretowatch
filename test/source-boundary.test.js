@@ -39,7 +39,8 @@ function* imports(node) {
 }
 
 function violations(file, source) {
-  if (file === 'src/compose.js' || file === 'test/tmdb-search.test.js' || file.startsWith('src/api/')) return [];
+  const adapterTests = ['test/tmdb-search.test.js', 'test/tmdb-availability.test.js'];
+  if (file === 'src/compose.js' || adapterTests.includes(file) || file.startsWith('src/api/')) return [];
   const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true });
   return [...imports(tree)]
     .filter((specifier) => /(?:^|\/)(?:tmdb|streaming)\.js(?:[?#].*)?$/.test(specifier))
