@@ -1,6 +1,7 @@
 import { HttpError } from '../../src/api/http.js';
 import { render } from '../../src/render/search.js';
 import { checkNoOverflow } from './kit.js';
+import { hrefFor } from './title-links.js';
 
 const title = (name, year, mediaType = 'movie', tmdbId = null) => ({
   mediaType, tmdbId, imdbId: null, title: name, year, posterPath: null, ref: tmdbId ? `${mediaType}/${tmdbId}` : null,
@@ -19,7 +20,7 @@ const eight = [
 ];
 
 const press = (input, key) => input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
-const hrefFor = (chosen) => `/wheretowatch/#/title/${chosen.ref}`;
+
 const handlers = (log = []) => ({
   onInput: (value) => log.push(['input', value]),
   onSubmit: (value) => log.push(['submit', value]),
@@ -207,7 +208,7 @@ const scenarios = [
     const links = container.querySelectorAll('ul a[href]');
     if (links.length !== 8) problems.push(`${links.length} links instead of 8`);
     links.forEach((link, index) => {
-      const expected = `/wheretowatch/#/title/${eight[index].ref}`;
+      const expected = hrefFor(eight[index]);
       if (link.getAttribute('href') !== expected) problems.push(`link ${index + 1} points to "${link.getAttribute('href')}" instead of "${expected}"`);
     });
     return problems;
