@@ -121,7 +121,41 @@ function testScenario(name, outcome, expected) {
   };
 }
 
+// A scenario that picks a theme in the real Settings screen and checks the page and the stored choice.
+function themeScenario(name, label, value, { stored } = {}) {
+  return {
+    name,
+    render(container) {
+      container.previousTheme = document.documentElement.getAttribute('data-theme');
+      container.mounted = mount(container, stored ? { stored: { 'wtw.theme': stored } } : {});
+    },
+    check(container) {
+      const problems = checkNoOverflow(container);
+      const radios = [...container.querySelectorAll('fieldset.segmented input[type="radio"]')];
+      if (radios.length !== 3) return [...problems, `${radios.length} theme choices`];
+      if (new Set(radios.map((radio) => radio.name)).size !== 1) problems.push('the choices are not one radio group');
+      const choice = radios.find((radio) => radio.value === value);
+      if (!choice.labels?.[0]?.textContent.includes(label)) problems.push(`the ${value} choice is not labelled ${label}`);
+      if (!container.querySelector('fieldset legend')) problems.push('the group has no legend');
+      const checked = radios.filter((radio) => radio.checked).map((radio) => radio.value);
+      if (stored ? checked[0] !== stored : checked[0] !== 'dark') problems.push(`the checked choice is ${checked}`);
+      choice.checked = true;
+      choice.dispatchEvent(new Event('change', { bubbles: true }));
+      if (document.documentElement.getAttribute('data-theme') !== value) problems.push('the theme does not change without a reload');
+      if (container.mounted.storage.getItem('wtw.theme') !== value) problems.push('the choice is not remembered');
+      if (container.mounted.settings.getPref('theme') !== value) problems.push('setPref does not return the choice');
+      const previous = container.previousTheme;
+      if (previous === null) document.documentElement.removeAttribute('data-theme');
+      else document.documentElement.setAttribute('data-theme', previous);
+      return problems;
+    },
+  };
+}
+
 const scenarios = [
+  themeScenario('Settings · dark theme chosen', 'Dark', 'dark', { stored: 'light' }),
+  themeScenario('Settings · light theme chosen', 'Light', 'light'),
+  themeScenario('Settings · auto theme chosen', 'Auto', 'auto'),
   {
     name: 'Settings · empty',
     render(container) {

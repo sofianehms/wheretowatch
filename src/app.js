@@ -3,6 +3,7 @@ import { renderHeader } from './render/header.js';
 import { bindSearch } from './render/search.js';
 import { renderSettings } from './render/settings.js';
 import { renderWelcome } from './render/welcome.js';
+import { applyTheme } from './theme.js';
 
 /**
  * Show the right screen for the stored keys and the navigation state.
@@ -74,7 +75,7 @@ export function startApp(app, root = document) {
         onCleared: () => {
           // Erasure also forgets the query typed before, so the next key starts from a blank search.
           search.reset();
-          (root.ownerDocument ?? root).documentElement.setAttribute('data-theme', 'dark');
+          applyTheme('dark', root.ownerDocument ?? root);
           closeSettings();
         },
       });

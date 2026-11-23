@@ -178,6 +178,7 @@ try {
   for (const { path: route } of pages) {
     for (const { preference, system, theme, scheme } of [
       { preference: null, system: 'light', theme: 'dark', scheme: 'dark' },
+      { preference: 'light', system: 'dark', theme: 'light', scheme: 'light' },
       { preference: 'auto', system: 'dark', theme: 'auto', scheme: 'dark' },
       { preference: 'auto', system: 'light', theme: 'auto', scheme: 'light' },
     ]) {

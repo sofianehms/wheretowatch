@@ -1,5 +1,6 @@
 import { DEFAULT_QUOTA_CONFIG } from '../api/quota.js';
 import { formatNumber, t } from '../i18n/strings.js';
+import { applyTheme, THEMES } from '../theme.js';
 import { el, externalLink, icon, richText, uniqueId } from './dom.js';
 
 // Look and icon of each key status (a text label and an icon, never color alone).
@@ -289,6 +290,39 @@ export function renderSettings({ settings, checkKey, quotaLimit, durable = true,
   clearRow.append(clear);
   data.append(el('h2', '', t('settings.data.title'), { id: dataId }), prose, clearRow);
 
+  const themeId = uniqueId('settings-theme');
+  const helpId = `${themeId}-help`;
+  const theme = el('section', '', '', { 'aria-labelledby': themeId });
+  const group = el('fieldset', 'segmented', '', { 'aria-describedby': helpId });
+  group.append(el('legend', 'visually-hidden', t('settings.theme.title')));
+  const themeName = uniqueId('theme');
+  const themeNote = el('p', 'key-state key-state--bad', '', { role: 'status' });
+  themeNote.hidden = true;
+  for (const value of THEMES) {
+    const label = el('label');
+    const radio = el('input', '', '', { type: 'radio', name: themeName, value });
+    radio.checked = settings.getPref('theme') === value;
+    radio.addEventListener('change', () => {
+      applyTheme(value, root.ownerDocument);
+      themeNote.replaceChildren();
+      try {
+        settings.setPref('theme', value);
+        themeNote.hidden = true;
+      } catch {
+        themeNote.append(icon('alert', 'sm'), t('settings.theme.error'));
+        themeNote.hidden = false;
+      }
+    });
+    label.append(radio, t(`settings.theme.${value}`));
+    group.append(label);
+  }
+  theme.append(
+    el('h2', '', t('settings.theme.title'), { id: themeId }),
+    group,
+    el('p', 'field__help', t('settings.theme.help'), { id: helpId }),
+    themeNote,
+  );
+
   let scrim = null;
   function closeDialog({ restoreFocus = true } = {}) {
     scrim?.remove();
@@ -318,6 +352,6 @@ export function renderSettings({ settings, checkKey, quotaLimit, durable = true,
     tmdb.abort();
     sa.abort();
   };
-  root.append(keys, data);
+  root.append(keys, theme, data);
   return root;
 }
