@@ -1,8 +1,13 @@
 import { DEFAULT_QUOTA_CONFIG } from '../api/quota.js';
 import { formatNumber, t } from '../i18n/strings.js';
+import { applyTheme, THEMES } from '../theme.js';
 import { el, externalLink, icon, richText, uniqueId } from './dom.js';
 
+// Theme choice applied but not saved, kept so reopening Settings stays in sync with the page.
+let unsavedTheme = null;
+
 // Look and icon of each key status (a text label and an icon, never color alone).
+
 const statusLook = {
   saved: ['ok', 'checkCircle'],
   valid: ['ok', 'checkCircle'],
@@ -289,6 +294,46 @@ export function renderSettings({ settings, checkKey, quotaLimit, durable = true,
   clearRow.append(clear);
   data.append(el('h2', '', t('settings.data.title'), { id: dataId }), prose, clearRow);
 
+  const themeId = uniqueId('settings-theme');
+  const helpId = `${themeId}-help`;
+  const theme = el('section', '', '', { 'aria-labelledby': themeId });
+  const group = el('fieldset', 'segmented', '', { 'aria-describedby': helpId });
+  group.append(el('legend', 'visually-hidden', t('settings.theme.title')));
+  const themeName = uniqueId('theme');
+  const themeNote = el('p', 'key-state key-state--bad', '', { role: 'status' });
+  themeNote.hidden = true;
+  // A choice that applied but could not be saved stays selected, with its warning, when Settings reopens.
+  const shown = unsavedTheme ?? settings.getPref('theme');
+  const showSaveError = () => {
+    themeNote.replaceChildren(icon('alert', 'sm'), t('settings.theme.error'));
+    themeNote.hidden = false;
+  };
+  if (unsavedTheme) showSaveError();
+  for (const value of THEMES) {
+    const label = el('label');
+    const radio = el('input', '', '', { type: 'radio', name: themeName, value });
+    radio.checked = shown === value;
+    radio.addEventListener('change', () => {
+      applyTheme(value, root.ownerDocument);
+      try {
+        settings.setPref('theme', value);
+        unsavedTheme = null;
+        themeNote.hidden = true;
+      } catch {
+        unsavedTheme = value;
+        showSaveError();
+      }
+    });
+    label.append(radio, t(`settings.theme.${value}`));
+    group.append(label);
+  }
+  theme.append(
+    el('h2', '', t('settings.theme.title'), { id: themeId }),
+    group,
+    el('p', 'field__help', t('settings.theme.help'), { id: helpId }),
+    themeNote,
+  );
+
   let scrim = null;
   function closeDialog({ restoreFocus = true } = {}) {
     scrim?.remove();
@@ -300,6 +345,7 @@ export function renderSettings({ settings, checkKey, quotaLimit, durable = true,
       onCancel: () => closeDialog(),
       onConfirm() {
         settings.clearAll();
+        unsavedTheme = null;
         tmdb.abort();
         sa.abort();
         closeDialog({ restoreFocus: false });
@@ -318,6 +364,6 @@ export function renderSettings({ settings, checkKey, quotaLimit, durable = true,
     tmdb.abort();
     sa.abort();
   };
-  root.append(keys, data);
+  root.append(keys, theme, data);
   return root;
 }
