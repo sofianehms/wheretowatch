@@ -91,7 +91,11 @@ test('unknown coverage contributes to neither country counts nor service groups'
   assert.deepEqual(result.countries[0].offers.sa, []);
 
   const unknown = { ...input, coverage: {} };
-  assert.deepEqual(netflix(unknown), { countries: [], coveredCountries: new Set(), confirmedCount: 0 });
+  const resultWithoutCoverage = netflix(unknown);
+  assert.deepEqual(resultWithoutCoverage.countries, []);
+  assert.deepEqual(resultWithoutCoverage.coveredCountries, new Set());
+  assert.equal(resultWithoutCoverage.confirmedCount, 0);
+  assert.equal(resultWithoutCoverage.coverage.sa.status, 'unknown');
   assert.equal(reconcileAll(unknown).size, 0);
 });
 
@@ -104,5 +108,7 @@ test('reconcileAll groups offers by service with the same result as individual r
       [...offers.tmdb, ...offers.sa].every((offer) => offer.serviceKey === serviceKey)));
   }
   const missing = reconcile({ ...disagreement, serviceKey: 'missing' });
-  assert.deepEqual(missing, { countries: [], coveredCountries: new Set(['fr', 'ca', 'de']), confirmedCount: 0 });
+  assert.deepEqual(missing.countries, []);
+  assert.deepEqual(missing.coveredCountries, new Set(['fr', 'ca', 'de']));
+  assert.equal(missing.confirmedCount, 0);
 });
