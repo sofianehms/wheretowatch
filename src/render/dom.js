@@ -3,6 +3,7 @@ const SVG = 'http://www.w3.org/2000/svg';
 
 const iconPaths = {
   settings: 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h.01',
+  chevDown: 'm6 9 6 6 6-6',
   chevLeft: 'm15 18-6-6 6-6',
   checkCircle: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM8 12l3 3 5-6',
   alert: 'M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',

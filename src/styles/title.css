@@ -129,3 +129,5 @@
   .result-aside .poster.poster--card { width: var(--poster-hero); font-size: var(--text-2xl); }
   .result-aside .title-head__name { font-size: var(--text-2xl); }
 }
+.badge--confirmed { color: var(--color-positive); }
+.covered { margin-top: var(--space-2); }
