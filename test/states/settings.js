@@ -121,7 +121,87 @@ function testScenario(name, outcome, expected) {
   };
 }
 
+// A scenario that picks a theme in the real Settings screen and checks the page and the stored choice.
+function themeScenario(name, label, value, { stored } = {}) {
+  return {
+    name,
+    render(container) {
+      container.previousTheme = document.documentElement.getAttribute('data-theme');
+      container.mounted = mount(container, stored ? { stored: { 'wtw.theme': stored } } : {});
+    },
+    check(container) {
+      const problems = checkNoOverflow(container);
+      const radios = [...container.querySelectorAll('fieldset.segmented input[type="radio"]')];
+      if (radios.length !== 3) return [...problems, `${radios.length} theme choices`];
+      if (new Set(radios.map((radio) => radio.name)).size !== 1) problems.push('the choices are not one radio group');
+      // Keyboard operability: native radios, reachable by Tab and arrow keys, never removed from the tab order.
+      if (radios.some((radio) => radio.disabled || radio.tabIndex < 0 || radio.hidden || radio.closest('[hidden], [inert]'))) problems.push('a theme choice cannot be reached with the keyboard');
+      const choice = radios.find((radio) => radio.value === value);
+      if (!choice.labels?.[0]?.textContent.includes(label)) problems.push(`the ${value} choice is not labelled ${label}`);
+      if (!container.querySelector('fieldset legend')) problems.push('the group has no legend');
+      const checked = radios.filter((radio) => radio.checked).map((radio) => radio.value);
+      if (stored ? checked[0] !== stored : checked[0] !== 'dark') problems.push(`the checked choice is ${checked}`);
+      choice.checked = true;
+      choice.dispatchEvent(new Event('change', { bubbles: true }));
+      if (document.documentElement.getAttribute('data-theme') !== value) problems.push('the theme does not change without a reload');
+      if (container.mounted.storage.getItem('wtw.theme') !== value) problems.push('the choice is not remembered');
+      if (container.mounted.settings.getPref('theme') !== value) problems.push('setPref does not return the choice');
+      const previous = container.previousTheme;
+      if (previous === null) document.documentElement.removeAttribute('data-theme');
+      else document.documentElement.setAttribute('data-theme', previous);
+      return problems;
+    },
+  };
+}
+
+// A save that fails still applies the choice; reopening Settings must show that choice and the warning.
+// The whole sequence runs while rendering so the shared failed-save state never reaches other scenarios.
+const failedSaveScenario = {
+  name: 'Settings · theme save failed, reopened',
+  render(container) {
+    const problems = [];
+    const previous = document.documentElement.getAttribute('data-theme');
+    const storage = memoryStorage({ 'wtw.theme': 'auto' });
+    const working = storage.setItem;
+    storage.setItem = () => { throw new Error('storage full'); };
+    const first = mount(container, { storage });
+    first.root.querySelector('input[value="dark"]').dispatchEvent(new Event('change', { bubbles: true }));
+    first.root.remove();
+    container.reopened = mount(container, { storage });
+    const radios = [...container.reopened.root.querySelectorAll('fieldset.segmented input[type="radio"]')];
+    const checked = radios.filter((radio) => radio.checked).map((radio) => radio.value);
+    if (checked.join() !== 'dark') problems.push(`reopened Settings selects ${checked}, not the applied dark`);
+    if (container.reopened.root.querySelector('.key-state--bad[role="status"]')?.hidden !== false) problems.push('the save warning is gone after reopening');
+    // A later successful save clears the failed-save state.
+    storage.setItem = working;
+    radios.find((radio) => radio.value === 'auto').dispatchEvent(new Event('change', { bubbles: true }));
+    if (container.reopened.root.querySelector('.key-state--bad[role="status"]')?.hidden !== true) problems.push('the save warning stays after a successful retry');
+    // A failed save followed by "Clear my data" must not leak the unsaved choice into the next Settings.
+    storage.setItem = () => { throw new Error('storage full'); };
+    container.reopened.root.remove();
+    const failing = mount(container, { storage });
+    failing.root.querySelector('input[value="light"]').dispatchEvent(new Event('change', { bubbles: true }));
+    storage.setItem = working;
+    buttonNamed(failing.root, 'Clear my data').click();
+    buttonNamed(failing.root, 'Clear data').click();
+    failing.root.remove();
+    const afterClear = mount(container, { storage });
+    const left = [...afterClear.root.querySelectorAll('fieldset.segmented input[type="radio"]')].filter((radio) => radio.checked).map((radio) => radio.value);
+    if (left.join() !== 'dark') problems.push(`Settings after erasure selects ${left}, not dark`);
+    if (afterClear.root.querySelector('.key-state--bad[role="status"]')?.hidden !== true) problems.push('the save warning survives the erasure');
+    container.reopened = afterClear;
+    if (previous === null) document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', previous);
+    container.problems = problems;
+  },
+  check: (container) => container.problems,
+};
+
 const scenarios = [
+  failedSaveScenario,
+  themeScenario('Settings · dark theme chosen', 'Dark', 'dark', { stored: 'light' }),
+  themeScenario('Settings · light theme chosen', 'Light', 'light'),
+  themeScenario('Settings · auto theme chosen', 'Auto', 'auto'),
   {
     name: 'Settings · empty',
     render(container) {
