@@ -22,11 +22,18 @@ const press = (input, key) => input.dispatchEvent(new KeyboardEvent('keydown', {
 const handlers = (log = []) => ({
   onInput: (value) => log.push(['input', value]),
   onSubmit: (value) => log.push(['submit', value]),
-  onChoose: (chosen) => log.push(['choose', chosen.title]),
+  onChoose: (chosen) => log.push(['choose', chosen.title, chosen.tmdbId]),
   onRetry: (value) => log.push(['retry', value]),
   onCheckKey: () => log.push(['key']),
   onCancel: () => log.push(['cancel']),
 });
+
+// The production popover is absolute from the desktop width: keep the room it covers so it does not overlap the next sample.
+function reserve(container) {
+  const shown = [...container.querySelectorAll('.listbox')].some((box) => !box.hidden);
+  const absolute = shown && getComputedStyle(container.querySelector('.listbox')).position === 'absolute';
+  container.style.paddingBottom = absolute ? 'calc(var(--popover-max-h) + var(--space-4))' : '';
+}
 
 function scenario(name, state, options = {}, verify = () => []) {
   return {
@@ -35,6 +42,7 @@ function scenario(name, state, options = {}, verify = () => []) {
       container.classList.add('search-sample');
       container.log = [];
       render(container, state, handlers(container.log), options);
+      reserve(container);
     },
     check(container) {
       return [...verify(container), ...checkNoOverflow(container)];
@@ -52,7 +60,7 @@ function checkCombobox(container, { expanded }) {
   if (input.getAttribute('role') !== 'combobox') problems.push('the field is not a combobox');
   if (input.getAttribute('aria-expanded') !== String(expanded)) problems.push(`aria-expanded is not ${expanded}`);
   if (input.getAttribute('aria-controls') !== list.id) problems.push('the combobox does not control the list');
-  if (input.closest('ul, ol') || list.contains(input)) problems.push('the list is not a sibling of the field');
+  if (input.closest('ul, ol') || list.contains(input) || input.closest('.search__field')?.parentElement !== list.parentElement) problems.push('the list is not a sibling of the field');
   if (!input.labels?.length) problems.push('the field has no label');
   if (parseFloat(getComputedStyle(input).fontSize) < 16) problems.push('the field font is under 16 px');
   return problems;
@@ -71,6 +79,7 @@ function checkKeyboard(container) {
   if (active() !== list.lastElementChild.id) problems.push('ArrowUp does not wrap to the last option');
   press(input, 'ArrowDown');
   press(input, 'ArrowDown');
+  // The second same-titled entry (1998) is the one selected.
   if (active() !== list.children[1].id) problems.push('ArrowDown does not move to the next option');
   press(input, 'Escape');
   if (!list.hidden || input.getAttribute('aria-expanded') !== 'false' || active()) problems.push('the first Escape does not close the list');
@@ -78,7 +87,7 @@ function checkKeyboard(container) {
   press(input, 'ArrowDown');
   if (list.hidden) problems.push('ArrowDown does not reopen the list');
   press(input, 'Enter');
-  if (!log.some(([name, value]) => name === 'choose' && value === 'Harbour Lights') || !list.hidden) problems.push('Enter does not choose the active option');
+  if (!log.some(([name, value, id]) => name === 'choose' && value === 'Harbour Lights' && id === 11) || !list.hidden) problems.push('Enter does not choose the active option');
   press(input, 'ArrowDown');
   press(input, 'Tab');
   if (!list.hidden || active()) problems.push('Tab does not close the list');
@@ -130,6 +139,7 @@ const scenarios = [
       container.classList.add('search-sample');
       container.log = [];
       render(container, { status: 'results', query: 'harb', titles: eight }, handlers(container.log));
+      reserve(container);
     },
   },
   scenario('Search · no results', { status: 'empty', query: 'xqzt', titles: [] }, {}, (container) => {
@@ -178,6 +188,10 @@ const scenarios = [
         const problems = [];
         if (document.activeElement !== container.querySelector('input')) problems.push('Escape from a link does not return to the field');
         if (!container.querySelector('ul').hidden) problems.push('Escape from a link leaves the list open');
+        // Show the links again so the capture keeps them.
+        container.querySelector('input').dispatchEvent(new Event('input', { bubbles: true }));
+        render(container, { status: 'results', query: 'harb', titles: eight }, handlers(container.log), { fallback: true });
+        if (container.querySelector('ul').hidden) problems.push('the fallback list does not reopen after typing');
         return problems;
       },
     }],
@@ -188,6 +202,7 @@ const scenarios = [
       container.classList.add('search-sample');
       container.log = [];
       render(container, { status: 'results', query: 'harb', titles: eight }, handlers(container.log));
+      reserve(container);
     },
     check: (container) => [...checkKeyboard(container), ...checkNoOverflow(container)],
     // Trusted key presses: the native Escape of a search field cannot be reproduced with synthetic events.
@@ -220,6 +235,28 @@ export function check() {
   render(container, { status: 'results', query: 'harb', titles: eight }, handlers());
   const elapsed = performance.now() - started;
   container.remove();
+  const withPoster = document.createElement('div');
+  document.body.append(withPoster);
+  render(withPoster, { status: 'results', query: 'p', titles: [{ ...title('Poster Case', 2020, 'movie', 21), posterPath: '/poster.jpg' }] }, handlers());
+  const image = withPoster.querySelector('.poster img');
+  if (!image || !image.getAttribute('src')?.endsWith('/poster.jpg')) problems.push('a suggestion with a poster does not render its image');
+  withPoster.remove();
+
+  // Tab during loading must not let late suggestions open; going offline keeps the notice visible.
+  const flow = document.createElement('div');
+  document.body.append(flow);
+  render(flow, { status: 'loading', query: 'harb' }, handlers());
+  const field = flow.querySelector('input');
+  field.focus();
+  press(field, 'Tab');
+  render(flow, { status: 'results', query: 'harb', titles: eight }, handlers());
+  if (!flow.querySelector('ul').hidden) problems.push('suggestions open after Tab during loading');
+  field.value = 'harb';
+  field.focus();
+  render(flow, { status: 'idle', online: false }, handlers());
+  field.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+  if (flow.querySelector('.listbox:not(ul)').hidden) problems.push('the offline notice is hidden after the field is disabled');
+  flow.remove();
   if (container.querySelectorAll('[role="option"]').length !== 8) problems.push('the timing sample did not render 8 suggestions');
   if (elapsed > 100) problems.push(`rendering 8 suggestions took ${Math.round(elapsed)} ms (over 100 ms)`);
   return problems;

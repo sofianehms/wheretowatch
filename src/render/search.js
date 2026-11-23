@@ -291,6 +291,8 @@ function build(container, fallback) {
     showStatus();
     syncClear();
     // A response that arrives after the user dismissed the list or moved on must not reopen it.
+    // The offline notice does not depend on a dismissal: the field is disabled and nothing else says why.
+    if (state.online === false) dismissed = false;
     setOpen(!dismissed && (state.status !== 'idle' || state.online === false));
   }
 
@@ -323,6 +325,8 @@ function build(container, fallback) {
   });
   root.addEventListener('focusout', (event) => {
     if (root.contains(event.relatedTarget)) return;
+    // Disabling the focused field (going offline) also fires this event: the notice stays visible.
+    if (input.disabled || state.online === false) return;
     dismissed = true;
     setOpen(false);
   });
@@ -353,8 +357,9 @@ function build(container, fallback) {
         dismissed = true;
         setOpen(false);
       } else clearField();
-    } else if (event.key === 'Tab' && !fallback && hasList()) {
-      // Tab leaves the list; the retry and key actions stay reachable because their panel is not closed.
+    } else if (event.key === 'Tab' && !fallback && (hasList() || (open && state.status === 'loading'))) {
+      // Tab leaves the list or the loading rows, which must not open once focus has moved on;
+      // the retry and key actions stay reachable because their panel is not closed.
       dismissed = true;
       setOpen(false);
     }
