@@ -175,6 +175,8 @@ function build(container, fallback) {
     }
   }
 
+  let dismissed = false;
+
   function setOpen(next) {
     open = next;
     list.hidden = !(open && hasList());
@@ -288,11 +290,13 @@ function build(container, fallback) {
     if (value !== undefined && document.activeElement !== input && input.value !== value) input.value = value;
     showStatus();
     syncClear();
-    setOpen(state.status !== 'idle' || state.online === false);
+    // A response that arrives after the user dismissed the list or moved on must not reopen it.
+    setOpen(!dismissed && (state.status !== 'idle' || state.online === false));
   }
 
   function clearField() {
     input.value = '';
+    dismissed = false;
     syncClear();
     handlers.onCancel?.();
   }
@@ -302,16 +306,25 @@ function build(container, fallback) {
   panel.addEventListener('mousedown', (event) => event.preventDefault());
 
   input.addEventListener('input', () => {
+    dismissed = false;
     syncClear();
     handlers.onInput?.(input.value);
   });
   input.addEventListener('compositionstart', () => handlers.onCompositionStart?.());
   input.addEventListener('compositionend', () => handlers.onCompositionEnd?.(input.value));
-  input.addEventListener('focus', () => {
+  input.addEventListener('focus', (event) => {
+    // Focus arriving from inside the widget (Escape from a link, Shift+Tab) keeps the list dismissed.
+    if (!root.contains(event.relatedTarget)) dismissed = false;
+    if (state.status !== 'idle' && !open && !dismissed) setOpen(true);
+  });
+  input.addEventListener('pointerdown', () => {
+    dismissed = false;
     if (state.status !== 'idle' && !open) setOpen(true);
   });
   root.addEventListener('focusout', (event) => {
-    if (!root.contains(event.relatedTarget)) setOpen(false);
+    if (root.contains(event.relatedTarget)) return;
+    dismissed = true;
+    setOpen(false);
   });
   clear.addEventListener('click', () => {
     clearField();
@@ -324,6 +337,7 @@ function build(container, fallback) {
     if (move && !fallback) {
       if (!hasList()) return;
       event.preventDefault();
+      dismissed = false;
       if (!open) setOpen(true);
       const last = options.length - 1;
       if (active < 0) setActive(move > 0 ? 0 : last);
@@ -335,16 +349,20 @@ function build(container, fallback) {
     } else if (event.key === 'Escape') {
       // The native search field clears itself on Escape: the first press only closes the popup.
       event.preventDefault();
-      if (open && (state.status !== 'idle' || state.online === false)) setOpen(false);
-      else clearField();
+      if (open && (state.status !== 'idle' || state.online === false)) {
+        dismissed = true;
+        setOpen(false);
+      } else clearField();
     } else if (event.key === 'Tab' && !fallback && hasList()) {
       // Tab leaves the list; the retry and key actions stay reachable because their panel is not closed.
+      dismissed = true;
       setOpen(false);
     }
   });
   // In the fallback, Escape from a link returns to the field.
   list.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
+    dismissed = true;
     setOpen(false);
     input.focus();
   });

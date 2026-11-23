@@ -82,6 +82,8 @@ function checkKeyboard(container) {
   press(input, 'ArrowDown');
   press(input, 'Tab');
   if (!list.hidden || active()) problems.push('Tab does not close the list');
+  render(container, { status: 'results', query: 'harb', titles: eight }, handlers(log));
+  if (!list.hidden) problems.push('a results update reopens the list after Tab dismissed it');
   press(input, 'Escape');
   if (input.value !== '' || !log.some(([name]) => name === 'cancel')) problems.push('Escape on a closed list does not clear the field');
   input.value = 'harb';
@@ -105,6 +107,9 @@ const scenarios = [
     const problems = checkCombobox(container, { expanded: false });
     if (live(container) !== 'Searching…') problems.push('the loading state is not announced');
     if (container.querySelectorAll('.skeleton').length === 0) problems.push('no placeholders while loading');
+    for (const bar of container.querySelectorAll('.skeleton')) {
+      if (getComputedStyle(bar).animationName !== 'none') problems.push('a search placeholder is animated');
+    }
     return problems;
   }),
   {
@@ -131,6 +136,7 @@ const scenarios = [
     const problems = checkCombobox(container, { expanded: false });
     if (!container.textContent.includes('No movie or series matches “xqzt”.')) problems.push('the no-result message is missing');
     if (live(container) !== 'No results.') problems.push('the empty state is not announced');
+    if (container.querySelector('.listbox__note')?.getBoundingClientRect().height === 0) problems.push('the no-result panel is not visible');
     return problems;
   }),
   scenario('Search · error (retry)', { status: 'error', query: 'harb', error: new HttpError('timeout') }, {}, (container) => {
@@ -155,13 +161,27 @@ const scenarios = [
     if (live(container) !== 'Connection required') problems.push('the offline state is not announced');
     return problems;
   }),
-  scenario('Search · results, fallback list of links', { status: 'results', query: 'harb', titles: eight }, { fallback: true }, (container) => {
+  {
+    ...scenario('Search · results, fallback list of links', { status: 'results', query: 'harb', titles: eight }, { fallback: true }, (container) => {
     const problems = [];
     if (container.querySelector('[role="combobox"], [role="listbox"], [role="option"]')) problems.push('the fallback still uses combobox roles');
     const links = container.querySelectorAll('ul a[href]');
     if (links.length !== 8) problems.push(`${links.length} links instead of 8`);
     return problems;
   }),
+    realKeys: [{
+      before(container) {
+        container.querySelector('ul a[href]').focus();
+      },
+      keys: ['Escape'],
+      after(container) {
+        const problems = [];
+        if (document.activeElement !== container.querySelector('input')) problems.push('Escape from a link does not return to the field');
+        if (!container.querySelector('ul').hidden) problems.push('Escape from a link leaves the list open');
+        return problems;
+      },
+    }],
+  },
   {
     name: 'Search · keyboard journey',
     render(container) {

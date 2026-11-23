@@ -6,3 +6,5 @@
 .sample-anchor:not(.sample-anchor--live) .listbox { position: static; }
 /* The live sample keeps the production popover placement; this room stops it from covering the next sample. */
 .sample-room { padding-bottom: calc(var(--space-16) * 3); }
+/* Search specimens: the production popover is absolute on desktop, so each one reserves the room of its panel. */
+@media (min-width: 48rem) { .search-sample { padding-bottom: calc(var(--popover-max-h) + var(--space-4)); } }
