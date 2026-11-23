@@ -42,6 +42,7 @@ import { HttpError } from './http.js';
  * @property {number|null} coveredCountries Country count, null when unknown.
  * @property {Offer[]} offers
  * @property {Error|null} error
+ * @property {string|null} [imdbId] IMDb identifier reported by the source, when supported.
  */
 
 /**
@@ -53,7 +54,7 @@ import { HttpError } from './http.js';
  * @typedef {object} Source
  * @property {'tmdb'|'sa'} id
  * @property {{search: boolean, availability: boolean, languages: boolean, instantSearch: boolean}} capabilities
- * @property {(query: string, options: RequestOptions) => Promise<Title[]>} searchTitles
+ * @property {(query: string, options: RequestOptions) => Promise<Title[]>} [searchTitles]
  * @property {(title: Title, options: RequestOptions) => Promise<SourceSnapshot>} getAvailability
  * @property {() => string[]|Promise<string[]>} listCoveredCountries
  */
