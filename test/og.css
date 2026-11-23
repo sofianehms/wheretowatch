@@ -1,7 +1,7 @@
-/* Source of assets/og-image.png (1200x630), captured by scripts/og-image.mjs. Tokens only. */
+/* Source of assets/og-image.png (1200x630), captured by scripts/og-image.mjs in a 1200x630 viewport. Tokens only. */
 body { overflow: hidden; }
-.og { width: 75rem; height: 39.375rem; display: grid; align-content: center; justify-items: start; gap: var(--space-6);
+.og { width: 100vw; height: 100vh; display: grid; align-content: center; justify-items: start; gap: var(--space-6);
   padding: 0 var(--space-16); background: var(--color-bg); }
 .og__mark { width: var(--space-16); height: var(--space-16); }
 .og__name { font-size: var(--text-2xl); font-weight: var(--weight-heavy); letter-spacing: var(--tracking-tight); color: var(--color-text-strong); }
-.og__tagline { font-size: var(--text-xl); color: var(--color-text-muted); max-width: 40rem; }
+.og__tagline { font-size: var(--text-xl); color: var(--color-text-muted); max-width: var(--content-max); }
