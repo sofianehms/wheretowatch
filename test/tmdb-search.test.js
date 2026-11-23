@@ -45,8 +45,7 @@ test('maps movies and series, removes people and limits suggestions to eight', a
   const extra = { ...search.results[0], id: 999999 };
   const { source, calls } = setup([json({ results: [...search.results, extra] })]);
   assert.equal(source.id, 'tmdb');
-  assert.deepEqual(source.capabilities, { search: true, availability: false, languages: false, instantSearch: true });
-  await assert.rejects(source.getAvailability(), { message: 'not implemented' });
+  assert.deepEqual(source.capabilities, { search: true, availability: true, languages: false, instantSearch: true });
   const titles = await source.searchTitles('Glass & Garden');
   assert.equal(titles.length, 8);
   assert.ok(titles.every(({ mediaType }) => ['movie', 'tv'].includes(mediaType)));

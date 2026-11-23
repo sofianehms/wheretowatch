@@ -43,6 +43,7 @@ import { HttpError } from './http.js';
  * @property {number|null} coveredCountries Country count, null when unknown.
  * @property {Offer[]} offers
  * @property {Error|null} error
+ * @property {Title} [title] Title with any identifiers resolved by the source.
  * @property {string|null} [imdbId] IMDb identifier reported by the source, when supported.
  */
 
