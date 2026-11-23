@@ -56,10 +56,9 @@ function mount(container, { stored = {}, storage: shared, check = async () => 'v
 }
 
 // The real application shell (src/app.js) on a page skeleton, with checks the scenario releases by hand.
-function mountApp(container, { stored = {}, productionRoot = false } = {}) {
+function mountApp(container, { stored = {}, productionRoot = false, sources, launchQuery = null } = {}) {
   const html = '<div id="header"></div><div id="welcome" hidden></div><div id="settings" hidden></div>'
-    + '<section id="search-view" hidden><form class="search" role="search"><label for="q" class="visually-hidden">Search</label>'
-    + '<input id="q" name="q" type="search" data-focus-target></form><p id="status" class="muted"></p></section>';
+    + '<section id="search-view" hidden><div id="search"></div></section>';
   // The production entry point defaults to the whole document, whose `ownerDocument` is null.
   const root = productionRoot ? document.implementation.createHTMLDocument('') : container;
   if (productionRoot) root.body.innerHTML = html;
@@ -70,7 +69,7 @@ function mountApp(container, { stored = {}, productionRoot = false } = {}) {
   const store = createStore();
   const pending = {};
   const checkKey = (provider) => new Promise((resolve) => { pending[provider] = resolve; });
-  startApp({ store, settings, checkKey, quotaLimit: () => quota.status().limit, durable: true }, root);
+  startApp({ store, settings, sources, checkKey, quotaLimit: () => quota.status().limit, durable: true }, root, { launchQuery });
   return { root, storage, store, pending, settings };
 }
 const shown = (container) => ['welcome', 'settings', 'search-view'].find((id) => !container.querySelector(`#${id}`).hidden);
@@ -401,7 +400,7 @@ const scenarios = [
     check(container) {
       const problems = [];
       if (shown(container) !== 'search-view') problems.push(`the screen is ${shown(container)}, not the search`);
-      const input = container.querySelector('#q');
+      const input = container.querySelector('#search input');
       if (input.tabIndex < 0) problems.push('the search field was taken out of the Tab order');
       return problems;
     },
@@ -426,10 +425,8 @@ const scenarios = [
       container.theme = document.documentElement.getAttribute('data-theme');
     },
     check(container) {
-      const input = container.querySelector('#q');
-      const status = container.querySelector('#status');
+      const input = container.querySelector('#search input');
       type(input, 'dune');
-      if (status.textContent === 'Type to search.') return ['typing does not update the status'];
       const problems = [];
       container.querySelector('#header .icon-btn').click();
       buttonNamed(container, 'Clear my data').click();
@@ -437,7 +434,7 @@ const scenarios = [
       if (container.theme === null) document.documentElement.removeAttribute('data-theme');
       else document.documentElement.setAttribute('data-theme', container.theme);
       if (input.value !== '') problems.push('the previous query survives erasure');
-      if (status.textContent !== 'Type to search.') problems.push('the search status survives erasure');
+      if (container.querySelector('#search .listbox:not([hidden])')) problems.push('the suggestions survive erasure');
       return problems;
     },
   },
@@ -607,6 +604,53 @@ const scenarios = [
       }
       buttonNamed(container, 'Add my TMDB key').click();
       if (container.opened !== 1) problems.push('the button does not open the Settings');
+      return problems;
+    },
+  },
+  {
+    name: 'Launch · ?q= fills the field and shows the suggestions at once',
+    async render(container) {
+      const calls = [];
+      const sources = {
+        async searchTitles(query) {
+          calls.push(query);
+          return { titles: [{ mediaType: 'movie', tmdbId: 27205, imdbId: null, title: 'Inception', year: 2010, posterPath: null, ref: 'movie/27205' }], error: null };
+        },
+      };
+      mountApp(container, { stored: { 'wtw.key.tmdb': sampleKey }, sources, launchQuery: 'inception' });
+      container.calls = calls;
+      await settle();
+    },
+    check(container) {
+      const problems = [];
+      if (shown(container) !== 'search-view') problems.push(`the screen is ${shown(container)}, not the search`);
+      if (container.querySelector('#search input').value !== 'inception') problems.push('the field is not prefilled');
+      if (container.calls.join() !== 'inception') problems.push(`the search ran ${JSON.stringify(container.calls)}`);
+      if (container.querySelectorAll('#search [role="option"]').length !== 1) problems.push('the suggestion is not listed');
+      return problems;
+    },
+  },
+  {
+    name: 'Launch · without a key the home screen waits and the search starts once the key is saved',
+    async render(container) {
+      const calls = [];
+      const sources = { async searchTitles(query) { calls.push(query); return { titles: [], error: null }; } };
+      const app = mountApp(container, { sources, launchQuery: 'dune' });
+      container.calls = calls;
+      container.app = app;
+      await settle();
+    },
+    async check(container) {
+      const problems = [];
+      if (shown(container) !== 'welcome') problems.push(`the screen is ${shown(container)}, not the welcome`);
+      if (container.calls.length) problems.push('a search ran without a key');
+      container.app.settings.setKey('tmdb', sampleKey);
+      container.querySelector('#header .icon-btn').click();
+      container.querySelector('#header .icon-btn').click();
+      await settle();
+      if (shown(container) !== 'search-view') problems.push(`the screen is ${shown(container)}, not the search`);
+      if (container.querySelector('#search input').value !== 'dune') problems.push('the query was lost');
+      if (container.calls.join() !== 'dune') problems.push(`the search ran ${JSON.stringify(container.calls)}`);
       return problems;
     },
   },

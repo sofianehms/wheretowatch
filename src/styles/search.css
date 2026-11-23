@@ -60,12 +60,6 @@
 .source-line { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--color-text-muted); }
 
 
-/* Placeholder search form of the shell page. */
-.search > input {
-  width: 100%; min-height: var(--tap-size); padding: 0 var(--space-4); font: inherit; color: inherit;
-  background: var(--color-surface); border: var(--border-width) solid var(--color-border-strong); border-radius: var(--radius-md);
-}
-.results { list-style: none; margin: var(--space-4) 0 0; padding: 0; }
 
 @media (min-width: 48rem) {
   .listbox { position: absolute; left: 0; right: 0; top: 100%; z-index: var(--z-popover); }

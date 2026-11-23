@@ -1,6 +1,7 @@
 // Application shell: wires the services to the welcome, the search and the Settings screens.
+import { createTypeahead } from './core/typeahead.js';
 import { renderHeader } from './render/header.js';
-import { bindSearch } from './render/search.js';
+import { render as renderSearch } from './render/search.js';
 import { renderSettings } from './render/settings.js';
 import { renderWelcome } from './render/welcome.js';
 import { applyTheme } from './theme.js';
@@ -8,9 +9,11 @@ import { applyTheme } from './theme.js';
 /**
  * Show the right screen for the stored keys and the navigation state.
  * @param {ReturnType<typeof import('./compose.js').compose>} app The composed services.
- * @param {ParentNode} root Where the screen slots (`#header`, `#welcome`, `#settings`, `#search-view`) live.
+ * @param {ParentNode} root Where the screen slots (`#header`, `#welcome`, `#settings`, `#search-view`, `#search`) live.
+ * @param {{launchQuery?: string | null}} [options] `launchQuery` is the `?q=` value: it fills the field and
+ *   starts the search at once, or waits for the TMDB key when none is saved yet.
  */
-export function startApp(app, root = document) {
+export function startApp(app, root = document, { launchQuery = null } = {}) {
   const { store, settings } = app;
 
   const headerSlot = root.querySelector('#header');
@@ -18,9 +21,71 @@ export function startApp(app, root = document) {
   const welcomeSlot = root.querySelector('#welcome');
   const settingsSlot = root.querySelector('#settings');
 
-  const input = root.querySelector('#q');
-  const status = root.querySelector('#status');
-  const search = bindSearch(input, status);
+  const searchSlot = root.querySelector('#search');
+
+  let searchState = { status: 'idle' };
+  let imageConfiguration = null;
+  let imageRequested = false;
+  let pendingLaunch = launchQuery;
+
+  const online = () => globalThis.navigator?.onLine !== false;
+  const noSearch = async () => ({ titles: [] });
+
+  function draw(next = searchState) {
+    searchState = next;
+    const input = renderSearch(searchSlot, { ...next, online: online(), imageConfiguration }, handlers).input;
+    input.dataset.focusTarget = '';
+  }
+
+  const typeahead = createTypeahead({
+    search: (query, { signal }) => (app.sources?.searchTitles ?? noSearch)(query, { signal }),
+    onState(state) {
+      draw(state);
+      store.set({
+        query: state.query ?? '',
+        suggestions: state.titles ?? [],
+        searchStatus: state.status,
+      });
+    },
+  });
+
+  const handlers = {
+    onInput: (value) => typeahead.input(value),
+    onSubmit: (value) => typeahead.submit(value),
+    onRetry: (value) => typeahead.submit(value),
+    onCancel: () => typeahead.cancel(),
+    onCompositionStart: () => typeahead.compositionStart(),
+    onCompositionEnd: (value) => typeahead.compositionEnd(value),
+    onCheckKey: () => openSettings(),
+  };
+  const search = {
+    // Empties the field and the suggestions.
+    reset() {
+      typeahead.cancel();
+      draw({ status: 'idle', value: '' });
+    },
+  };
+
+  // Poster URLs need the TMDB image configuration; without it posters show initials.
+  function loadImageConfiguration() {
+    if (imageRequested || !app.imageConfiguration) return;
+    imageRequested = true;
+    Promise.resolve(app.imageConfiguration()).then((configuration) => {
+      imageConfiguration = configuration ?? null;
+      draw();
+    }, () => {});
+  }
+
+  function runLaunch() {
+    const query = pendingLaunch;
+    pendingLaunch = null;
+    if (query === null) return;
+    draw({ status: 'idle', value: query });
+    typeahead.submit(query);
+  }
+
+  globalThis.addEventListener?.('online', () => draw());
+  globalThis.addEventListener?.('offline', () => draw());
 
   const openSettings = () => {
     firstRun = !settings.hasKey('tmdb');
@@ -58,6 +123,12 @@ export function startApp(app, root = document) {
     screen = null;
     welcomeSlot.replaceChildren();
     settingsSlot.replaceChildren();
+    if (view === 'search') {
+      draw();
+      loadImageConfiguration();
+      // Before the focus moves into the field, which would keep the typed text instead of the prefill.
+      runLaunch();
+    }
     if (view === 'welcome') welcomeSlot.append(renderWelcome({ onOpenSettings: openSettings }));
     if (view === 'settings') {
       screen = renderSettings({
@@ -74,6 +145,7 @@ export function startApp(app, root = document) {
         },
         onCleared: () => {
           // Erasure also forgets the query typed before, so the next key starts from a blank search.
+          pendingLaunch = null;
           search.reset();
           applyTheme('dark', root.ownerDocument ?? root);
           closeSettings();

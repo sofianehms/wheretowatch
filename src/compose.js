@@ -3,6 +3,7 @@ import { createCache } from './api/cache.js';
 import { checkSaKey, checkTmdbKey } from './api/keycheck.js';
 import { createQuota } from './api/quota.js';
 import { createSources } from './api/sources.js';
+import { createTmdbSource } from './api/tmdb.js';
 import { createSettings } from './settings/keys.js';
 import { createStore } from './state.js';
 
@@ -33,13 +34,13 @@ function memoryStorage() {
  * @param {object} [options]
  * @param {Storage} [options.storage]
  * @param {Navigator} [options.navigatorLike]
- * @param {import('./api/sources.js').Source[]} [options.adapters] Source adapters for the configured keys.
+ * @param {import('./api/sources.js').Source[]} [options.adapters] Source adapters; defaults to the TMDB source, which reads its key on every request.
  * @param {() => number} [options.now]
  */
 export function compose({
   storage = browserStorage(),
   navigatorLike = globalThis.navigator,
-  adapters = [],
+  adapters,
   now = Date.now,
 } = {}) {
   // Without browser storage the services run on memory: nothing survives the visit.
@@ -49,7 +50,8 @@ export function compose({
   const cache = createCache({ storage, now });
   const quota = createQuota({ storage, now });
   const settings = createSettings({ storage, navigatorLike, cache, quota });
-  const sources = createSources({ sources: adapters });
+  const tmdb = createTmdbSource({ cache, getToken: () => settings.getKey('tmdb') });
+  const sources = createSources({ sources: adapters ?? [tmdb] });
 
   /** Test a key without saving it. Resolves to a key check result. */
   function checkKey(provider, value, deps = {}) {
@@ -64,6 +66,8 @@ export function compose({
     sources,
     durable,
     checkKey,
+    // Poster base URL and sizes; resolves to null when unavailable, and posters then fall back to initials.
+    imageConfiguration: () => tmdb.getImageConfiguration(),
     quotaLimit: () => quota.status().limit,
   };
 }
