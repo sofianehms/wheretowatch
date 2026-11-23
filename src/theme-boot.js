@@ -24,9 +24,3 @@
   }
 })();
 
-// The canonical link stays relative in the sources (no hard-coded host); resolve it against the
-// current instance so crawlers and audits read an absolute URL.
-(function () {
-  var link = document.querySelector('link[rel="canonical"]');
-  if (link) link.setAttribute('href', link.href.split(/[?#]/)[0]);
-})();
