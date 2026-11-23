@@ -32,11 +32,11 @@ function setup(respond) {
     cache, now, getToken: () => 'fixture-authorization',
     http: (url, options) => request(url, {
       ...options,
-      fetchImpl(url) {
+      fetchImpl(url, { signal }) {
         const { pathname, search } = new URL(url);
         const endpoint = pathname + search;
         calls.push(endpoint);
-        return respond(endpoint);
+        return respond(endpoint, signal);
       },
     }),
   });
@@ -119,17 +119,48 @@ test('returns empty when no country has offers', async () => {
   assert.equal(calls.length, 2);
 });
 
-for (const missing of ['details', 'providers']) {
-  test(`returns notFound for a 404 from ${missing}`, async () => {
-    const { source } = setup((endpoint) => {
+for (const missing of ['details', 'providers', 'both endpoints']) {
+  test(`caches a 404 from ${missing} for 24 hours`, async () => {
+    let recovered = false;
+    const { source, calls, clock } = setup((endpoint) => {
       const part = endpoint.endsWith('/watch/providers') ? 'providers' : 'details';
-      return part === missing ? Response.json(notFound, { status: 404 }) : movieResponse(endpoint);
+      if (!recovered && (part === missing || missing === 'both endpoints')) {
+        return Response.json(notFound, { status: 404 });
+      }
+      return movieResponse(endpoint);
     });
     const snapshot = await source.getAvailability(movie);
     assert.equal(snapshot.status, 'notFound');
     assert.equal(snapshot.error, null);
     assert.equal(snapshot.coveredCountries, null);
     assert.deepEqual(snapshot.offers, []);
+    clock.time += TTL_BY_KIND.availability - 1;
+    assert.deepEqual(await source.getAvailability({ ...movie }), snapshot);
+    assert.equal(calls.length, 2);
+
+    clock.time++;
+    recovered = true;
+    assert.equal((await source.getAvailability(movie)).status, 'offers');
+    assert.deepEqual(calls.slice(2), missing === 'providers' ? calls.slice(1, 2) : calls.slice(0, 2));
+  });
+
+  if (missing === 'both endpoints') continue;
+  test(`a network failure takes precedence over a 404 from ${missing} and is retryable`, async () => {
+    let offline = true;
+    const { source, calls } = setup((endpoint) => {
+      const part = endpoint.endsWith('/watch/providers') ? 'providers' : 'details';
+      if (part === missing) return Response.json(notFound, { status: 404 });
+      if (offline) throw new TypeError('Network failure');
+      return movieResponse(endpoint);
+    });
+    const snapshot = await source.getAvailability(movie);
+    assert.equal(snapshot.status, 'unavailable');
+    assert.equal(snapshot.error.type, 'network');
+    offline = false;
+    assert.equal((await source.getAvailability(movie)).status, 'notFound');
+    assert.deepEqual(calls.slice(2), calls.slice(0, 2));
+    assert.equal((await source.getAvailability(movie)).status, 'notFound');
+    assert.equal(calls.length, 4);
   });
 }
 
@@ -150,11 +181,18 @@ test('returns unavailable with the network error type and retries only the faile
 });
 
 test('forwards cancellation to both requests', async () => {
-  const { source, calls } = setup(() => new Promise(() => {}));
+  const cancelled = new Map();
+  const { source, calls } = setup((endpoint, signal) => new Promise((_, reject) => {
+    signal.addEventListener('abort', () => {
+      cancelled.set(endpoint, signal.reason);
+      reject(signal.reason);
+    }, { once: true });
+  }));
   const controller = new AbortController();
   const pending = source.getAvailability(movie, { signal: controller.signal });
   assert.equal(calls.length, 2);
   controller.abort();
+  assert.deepEqual(cancelled, new Map(calls.map((endpoint) => [endpoint, 'aborted'])));
   const snapshot = await pending;
   assert.equal(snapshot.status, 'unavailable');
   assert.equal(snapshot.error.type, 'aborted');

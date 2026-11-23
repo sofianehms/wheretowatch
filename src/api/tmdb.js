@@ -156,6 +156,17 @@ export function createTmdbSource({
       }
 
       const ref = `${mediaType}/${tmdbId}`;
+      const missingKey = `tmdb.notFound.${ref}`;
+      const missing = cache.get(missingKey);
+      if (missing) {
+        const { fetchedAt, details } = missing.value;
+        return {
+          ...snapshot,
+          fetchedAt,
+          title: details ? { ...title, ref, imdbId: details.imdbId } : title,
+        };
+      }
+
       const [details, providers] = await Promise.allSettled([
         loadTitleData(`tmdb.details.${ref}`, 'metadata', async () => {
           const data = await get(ref, { append_to_response: 'external_ids' }, signal);
@@ -176,11 +187,19 @@ export function createTmdbSource({
         return { ...snapshot, status: 'unavailable', error: new HttpError('aborted') };
       }
       const failures = [details, providers].filter(({ status }) => status === 'rejected');
-      if (failures.some(({ reason }) => reason?.type === 'notFound')) return snapshot;
-      if (failures.length) {
-        const { reason } = failures[0];
+      // Technical failures take precedence so a mixed failure can be retried immediately.
+      const technicalFailure = failures.find(({ reason }) => reason?.type !== 'notFound');
+      if (technicalFailure) {
+        const { reason } = technicalFailure;
         const error = reason instanceof HttpError ? reason : new HttpError('server');
         return { ...snapshot, status: 'unavailable', error };
+      }
+      if (failures.length) {
+        cache.set(missingKey, {
+          fetchedAt: snapshot.fetchedAt,
+          details: details.status === 'fulfilled' ? details.value : null,
+        }, { kind: 'availability', source });
+        return snapshot;
       }
       return {
         ...snapshot,
