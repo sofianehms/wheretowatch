@@ -11,6 +11,7 @@
   --color-surface: #1f1f1f;         /* rows, cards, inputs */
   --color-surface-raised: #2a2a2a;  /* popover, active option, chips */
   --color-surface-hover: #333333;   /* pointer hover on rows (not used for state) */
+  --color-skeleton: #444444;        /* loading placeholders: visible on bg, surface and raised */
   --color-text: #f2f2f2;            /* body text: 16.46 on bg, 14.72 on surface, 12.82 on raised */
   --color-text-strong: #ffffff;     /* titles and verdicts: 18.42 on bg */
   --color-text-muted: #a3a3a3;      /* metadata: 7.30 on bg, 6.53 on surface, 5.69 on raised, 5.01 on hover */
@@ -58,6 +59,11 @@
   --leading: 1.5;
   --leading-tight: 1.2;
   --tracking-tight: -0.01em; /* large titles */
+  --tracking-poster: 0.04em; /* poster initials */
+  --tracking-field: 0.05em;  /* typed access keys */
+  --tracking-label: 0.08em;  /* uppercase section labels */
+  --underline-offset: 0.2em; /* links and highlighted matches */
+  --underline-thickness: 2px; /* highlighted match in a suggestion */
 
   /* ---- Space (4px grid) ---- */
   --space-1: 0.25rem;
@@ -76,6 +82,11 @@
   --layout-max: 72rem;   /* desktop frame */
   --aside-width: 20rem;  /* desktop result: poster and verdict column */
   --popover-max-h: 28rem;
+  --dialog-max: 26rem;   /* confirmation dialog width cap */
+  --search-max: 36rem;   /* header search width cap on wide screens */
+  --title-basis: 12rem;  /* title block wraps under the poster below this width */
+  /* Breakpoints: 48rem (tablet) and 64rem (desktop). A media query cannot read a custom
+     property, so the two thresholds stay literal in src/styles.css, search.css and title.css. */
 
   /* ---- Shape and depth ---- */
   --radius-sm: 0.25rem;  /* 4px: buttons, inputs, posters (streaming-app squareness) */
@@ -99,6 +110,14 @@
   --poster-card: 5rem;     /* 80 x 120 px result poster on phone (w185) */
   --poster-hero: 12rem;    /* 192 x 288 px result poster on desktop (w342) */
   --mark-size: 1.5rem;     /* product mark in the header */
+  --icon-stroke: 2;        /* stroke width of every line icon (viewBox units) */
+  --icon-offset: 0.1em;    /* optical alignment of a banner icon with its first line */
+  --poster-ratio: 2 / 3;   /* poster aspect ratio */
+  --poster-angle: 160deg;  /* poster placeholder gradient direction */
+  --hero-angle: 120deg;    /* title backdrop gradient direction */
+  --hero-fade-stop: 85%;   /* where the title backdrop reaches the page color */
+  --skeleton-short: 40%;   /* short skeleton line width */
+  --skeleton-mid: 65%;     /* medium skeleton line width */
 
   /* ---- Motion ---- */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -108,6 +127,8 @@
   --duration-pulse: 1200ms;/* skeleton pulse (constant, linear) */
   --press-scale: 0.97;
   --reveal-shift: 0.25rem; /* 4px rise of the result on reveal */
+  --pulse-opacity: 0.5;    /* lowest opacity of the skeleton pulse */
+  --disabled-opacity: 0.5; /* disabled buttons (disabled fields use a dashed frame instead) */
 
   /* ---- Layers ---- */
   --z-sticky: 10;
@@ -122,6 +143,7 @@
   --color-surface: #f3f3f3;
   --color-surface-raised: #ffffff;
   --color-surface-hover: #ebebeb;
+  --color-skeleton: #d4d4d4;
   --color-text: #141414;            /* 18.42 on bg, 16.60 on surface, 15.45 on hover */
   --color-text-strong: #000000;
   --color-text-muted: #595959;      /* 7.00 on bg, 6.31 on surface, 5.88 on hover */
@@ -151,6 +173,7 @@
     --color-surface: #f3f3f3;
     --color-surface-raised: #ffffff;
     --color-surface-hover: #ebebeb;
+    --color-skeleton: #d4d4d4;
     --color-text: #141414;
     --color-text-strong: #000000;
     --color-text-muted: #595959;

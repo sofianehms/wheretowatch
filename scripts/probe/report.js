@@ -1,5 +1,6 @@
 import {
-  compareQuota, extractShape, maskKeys, proposeMappings, saServices, tmdbServices,
+  compareQuota, extractShape, languagePresence, languageRates, maskKeys, offerCoverage,
+  proposeMappings, quotaDeltas, saServices, tmdbServices,
 } from './analysis.js';
 
 const status = (observed) => observed ? 'observed' : 'not observed';
@@ -29,7 +30,96 @@ function listServices(services) {
   return lines(services.map(({ id, name }) => quote(id) + ' — ' + quote(name)));
 }
 
-export function renderReport({ tmdb, sa, origin, keys }) {
+function rateRow(label, observations) {
+  const { total, audio, subtitles, closedCaptions } = languageRates(observations);
+  const rate = (count) => total ? count + '/' + total + ' (' + (100 * count / total).toFixed(1) + '%)' : 'n/a';
+  return '| ' + [label, rate(audio), rate(subtitles), rate(closedCaptions)].join(' | ') + ' |';
+}
+
+function languageReport({ region, sampleSize, selected, discovery, titles }) {
+  const sample = titles.map((title) => {
+    const options = title.body?.streamingOptions;
+    const expectedId = 'movie/' + title.id;
+    const matched = title.body?.tmdbId === expectedId;
+    const mismatch = title.status === 200 && title.body !== undefined && !matched
+      ? 'TMDB ID mismatch (expected ' + expectedId + ').' : undefined;
+    const usable = title.status === 200 && matched && options && typeof options === 'object' && !Array.isArray(options);
+    const anomaly = [title.anomaly, mismatch].filter(Boolean).join(' ');
+    return { ...title, anomaly, usable, observations: usable ? languagePresence(title.body) : [] };
+  });
+  const usableCount = sample.filter(({ usable }) => usable).length;
+  const contributingCount = sample.filter(({ observations }) => observations.length).length;
+  const measurement = contributingCount < sampleSize ? 'Incomplete' : 'Complete';
+  const observations = sample.flatMap((title) => title.observations);
+  const countries = [...new Set(observations.map(({ country }) => country))].sort();
+  return [
+    '## V-05 — Netflix language fill rates',
+    '',
+    '- Discovery region: ' + region,
+    '- Distinct movies selected: ' + selected + '/' + sampleSize,
+    '- Streaming Availability requests sent: ' + titles.length + '/' + sampleSize,
+    '- Matching show responses with a streaming options map: ' + usableCount + '/' + sampleSize,
+    '- Last discovery response: ' + (discovery?.status ?? 'not observed') + ' (' + (discovery?.anomaly ?? 'no anomaly') + ')',
+    ...(selected < sampleSize ? ['- No show requests sent because discovery did not fill the sample.'] : []),
+    '',
+    'V-05 samples the first distinct movies returned by TMDB discovery for Netflix in the selected region. ' +
+      'The rates describe this sample and its observed offers.',
+    '',
+    'Each observed movie-country pair with a Netflix offer counts once. A field is present if any Netflix offer ' +
+      'in that pair lists a language for it. Closed captions require a subtitle language marked as closed captions.',
+    '',
+    '### FR-009 — Observed overall and country fill rates',
+    '',
+    '- Measurement status: ' + measurement,
+    '- Titles contributing to the observed rates: ' + contributingCount + '/' + sampleSize,
+    '',
+    '| Scope | Audio languages | Subtitles | Closed captions |',
+    '| --- | --- | --- | --- |',
+    rateRow('Overall', observations),
+    ...countries.map((country) => rateRow(country.toUpperCase(), observations.filter((entry) => entry.country === country))),
+    '',
+    '### Per-title and per-country observations',
+    '',
+    '| TMDB movie / country | Audio languages | Subtitles | Closed captions |',
+    '| --- | --- | --- | --- |',
+    ...sample.flatMap(({ id, status, anomaly, observations }) => [
+      rateRow(id + ' (HTTP ' + (status ?? 'unavailable') + (anomaly ? ', ' + anomaly : '') + ')', observations),
+      ...observations.map((entry) => rateRow(id + ' / ' + entry.country.toUpperCase(), [entry])),
+    ]),
+    '',
+  ];
+}
+
+function titleSearchReport(search, { after, countries }, region) {
+  const coverage = Array.isArray(search.body) ? offerCoverage(search.body) : undefined;
+  const reference = countries.status === 200 ? Object.keys(countries.body ?? {})
+    .filter((code) => /^[a-z]{2}$/.test(code)) : [];
+  const allOffers = coverage?.length && reference.length
+    ? coverage.filter(({ offers }) => reference.every((code) => offers.includes(code))).length + '/' + coverage.length
+    : 'not observed';
+  const cost = after.status === 200 && search.status === 200 ? quotaDeltas(after.headers, search.headers) : [];
+  return [
+    '## V-18 — Streaming Availability title search',
+    '',
+    '- Query: Fight Club (country: ' + region + ')',
+    '- Streaming Availability requests sent: 1',
+    '- Results: ' + (coverage?.length ?? 'not observed'),
+    '- Countries present: ' + ([...new Set(coverage?.flatMap((entry) => entry.countries))].sort().join(', ') || 'none observed'),
+    '- Results with offers in every country returned by /countries: ' + allOffers,
+    '',
+    ...coverage?.map(({ countries, offers }, index) => '- Result ' + (index + 1) + ': country keys ' +
+      (countries.join(', ') || 'none') + '; nonempty offers ' + (offers.join(', ') || 'none')) ?? [],
+    '',
+    'Observed quota cost is the remaining-counter drop from the preceding show response. ' +
+      'Counter resets and concurrent usage can affect the estimate.',
+    '',
+    lines(cost.map(({ name, cost }) => name + ': ' + cost)),
+    '',
+    ...endpoint(search, ['$[]["streamingOptions"]']),
+  ];
+}
+
+export function renderReport({ tmdb, sa, v05, v18, region, origin, keys }) {
   const { searches, preflight, watch, regions, configuration, movie, tv } = tmdb;
   const { before, countries, after } = sa;
   const movieServices = tmdbServices(movie.body);
@@ -93,6 +183,8 @@ export function renderReport({ tmdb, sa, origin, keys }) {
       name + ': bracket delta ' + bracketDelta + ', countries response delta ' + quote(countriesDelta) +
       ', estimated countries cost ' + quote(estimate))),
     '',
+    ...(v05 ? languageReport(v05) : ['## V-05 — Netflix language fill rates', '', 'Status: not requested', '']),
+    ...(v18 ? titleSearchReport(v18, sa, region) : ['## V-18 — Streaming Availability title search', '', 'Status: not requested', '']),
     '## Service identifiers',
     '',
     'Status: ' + status(movieServices.length + tvServices.length + streamingServices.length),

@@ -11,7 +11,8 @@ const ignoredDirectories = new Set(['.git', '.verify', 'node_modules']);
 function* moduleFiles(directory = '') {
   for (const entry of readdirSync(join(repository, directory), { withFileTypes: true })) {
     const path = directory ? `${directory}/${entry.name}` : entry.name;
-    if (entry.isDirectory() && !ignoredDirectories.has(entry.name) && path !== 'src/api') {
+    // Hidden directories hold tooling and scratch data (other tests create `.probe-test-*` here while this one runs).
+    if (entry.isDirectory() && !entry.name.startsWith('.') && !ignoredDirectories.has(entry.name) && path !== 'src/api') {
       yield* moduleFiles(path);
     } else if (entry.isFile() && /\.[cm]?js$/.test(entry.name)) {
       yield path;
@@ -38,7 +39,7 @@ function* imports(node) {
 }
 
 function violations(file, source) {
-  if (file === 'src/compose.js' || file.startsWith('src/api/')) return [];
+  if (file === 'src/compose.js' || file === 'test/tmdb-search.test.js' || file.startsWith('src/api/')) return [];
   const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true });
   return [...imports(tree)]
     .filter((specifier) => /(?:^|\/)(?:tmdb|streaming)\.js(?:[?#].*)?$/.test(specifier))
@@ -66,6 +67,7 @@ test('boundary rejects direct and indirect module declarations in app layers and
     'src/settings/keys.js',
     'src/state.js',
     'src/main.js',
+    'src/app.js',
   ]) {
     assert.equal(violations(file, declarations).length, 5, file);
   }

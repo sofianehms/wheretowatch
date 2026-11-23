@@ -1,6 +1,7 @@
 // Quality gate for a static site: screenshots, no horizontal scroll, axe-core, Lighthouse, console errors.
 // Usage: npm run verify        Env: SHOTS_DIR (default .verify/shots), CHROME_PATH (default: auto-detect).
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 import AxeBuilder from '@axe-core/playwright';
@@ -24,6 +25,9 @@ function findChrome() {
   return found;
 }
 const chromePath = findChrome();
+// Chrome gets a throwaway config/cache home: verify never reads or writes the real browser profile.
+const chromeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-chrome-'));
+const chromeEnv = { XDG_CONFIG_HOME: chromeHome, XDG_CACHE_HOME: chromeHome };
 const sandboxArgs = (typeof process.getuid === 'function' && process.getuid() === 0) || process.env.CI ? ['--no-sandbox'] : [];
 
 const failures = [];
@@ -40,7 +44,7 @@ const allowedOrigins = new Set([
   'https://image.tmdb.org',
   'https://api.movieofthenight.com',
 ]);
-const browser = await chromium.launch({ executablePath: chromePath, args: sandboxArgs });
+const browser = await chromium.launch({ executablePath: chromePath, args: sandboxArgs, env: { ...process.env, ...chromeEnv } });
 
 function checkOrigin(url, report) {
   const requestOrigin = new URL(url).origin;
@@ -50,17 +54,33 @@ function checkOrigin(url, report) {
 async function prepareTheme(ctx, preference) {
   await ctx.addInitScript((theme) => {
     if (theme !== null && window === window.top) localStorage.setItem('wtw.theme', theme);
-    window.addEventListener('load', () => {
-      window.themeAtLoad = {
-        theme: document.documentElement.dataset.theme,
-        background: getComputedStyle(document.body).backgroundColor,
-      };
-    }, { once: true });
+    // Every theme the root ever carries, plus a sample at each early lifecycle point and at first paint.
+    const samples = [];
+    window.themeSamples = samples;
+    const sample = (point) => samples.push({
+      point,
+      theme: document.documentElement.dataset.theme,
+      background: document.body ? getComputedStyle(document.body).backgroundColor : null,
+    });
+    // Only the page's own load matters: later changes come from scenarios that switch the theme on purpose.
+    const watcher = new MutationObserver((records) => {
+      for (const r of records) {
+        // A value replaced within the same task never reaches a sample, so keep every previous value too.
+        if (r.target === document.documentElement && r.oldValue !== null) samples.push({ point: 'replaced theme', theme: r.oldValue, background: null });
+      }
+      sample('theme change');
+    });
+    watcher.observe(document, { attributes: true, subtree: true, attributeOldValue: true, attributeFilter: ['data-theme'] });
+    new PerformanceObserver((list, observer) => {
+      if (list.getEntries().some((entry) => entry.name === 'first-paint')) { sample('first paint'); observer.disconnect(); }
+    }).observe({ type: 'paint', buffered: true });
+    document.addEventListener('DOMContentLoaded', () => sample('DOMContentLoaded'), { once: true });
+    window.addEventListener('load', () => { sample('load'); watcher.disconnect(); }, { once: true });
   }, preference);
 }
 
 async function checkTheme(page, theme, scheme, report) {
-  const { atLoad, expectedBackground } = await page.evaluate((expectedScheme) => {
+  const { samples, expectedBackground } = await page.evaluate((expectedScheme) => {
     const root = document.documentElement;
     const currentTheme = root.getAttribute('data-theme');
     const probe = document.createElement('div');
@@ -71,11 +91,14 @@ async function checkTheme(page, theme, scheme, report) {
     probe.remove();
     if (currentTheme === null) root.removeAttribute('data-theme');
     else root.setAttribute('data-theme', currentTheme);
-    return { atLoad: window.themeAtLoad, expectedBackground };
+    return { samples: window.themeSamples ?? [], expectedBackground };
   }, scheme);
-  if (atLoad?.theme !== theme || atLoad.background !== expectedBackground) {
-    report(`at first load, expected theme ${theme} with ${scheme} background (${expectedBackground}); `
-      + `got ${atLoad?.theme ?? 'no theme'} with ${atLoad?.background ?? 'no background'}`);
+  if (!samples.some((s) => s.point === 'first paint')) report('no first paint was observed');
+  for (const s of samples) {
+    if (s.theme !== theme || (s.background !== null && s.background !== expectedBackground)) {
+      report(`at ${s.point}, expected theme ${theme} with ${scheme} background (${expectedBackground}); `
+        + `got ${s.theme ?? 'no theme'} with ${s.background ?? 'no body yet'}`);
+    }
   }
 }
 
@@ -89,6 +112,13 @@ async function checkStates(page, report) {
   const problems = await page.evaluate(() => window.statesReady);
   if (!problems) report('states page did not initialize');
   else problems.forEach(report);
+  // Steps that need trusted key presses (native default actions): the page prepares, we press, the page asserts.
+  const steps = await page.evaluate(() => window.statesKeySteps?.map((step) => step.keys) ?? []);
+  for (const [index, keys] of steps.entries()) {
+    await page.evaluate((i) => window.statesRunKeyStep(i, 'before'), index);
+    for (const key of keys) await page.keyboard.press(key);
+    (await page.evaluate((i) => window.statesRunKeyStep(i, 'after'), index)).forEach(report);
+  }
 }
 
 async function checkSubpath() {
@@ -167,6 +197,7 @@ try {
   for (const { path: route } of pages) {
     for (const { preference, system, theme, scheme } of [
       { preference: null, system: 'light', theme: 'dark', scheme: 'dark' },
+      { preference: 'light', system: 'dark', theme: 'light', scheme: 'light' },
       { preference: 'auto', system: 'dark', theme: 'auto', scheme: 'dark' },
       { preference: 'auto', system: 'light', theme: 'auto', scheme: 'light' },
     ]) {
@@ -223,7 +254,7 @@ try {
   await checkTextZoom('/');
   await checkTextZoom(pages.find((page) => isStatesPage(page.path)).path);
 
-  const chrome = await chromeLauncher.launch({ chromePath, chromeFlags: ['--headless=new', '--disable-gpu', ...sandboxArgs] });
+  const chrome = await chromeLauncher.launch({ chromePath, envVars: chromeEnv, chromeFlags: ['--headless=new', '--disable-gpu', ...sandboxArgs] });
   try {
     for (const { path: route } of pages.filter((p) => p.lighthouse)) {
       const run = await lighthouse(origin + route, { port: chrome.port, output: 'json', logLevel: 'error',
@@ -243,6 +274,7 @@ try {
 } finally {
   await browser.close();
   server.close();
+  fs.rmSync(chromeHome, { recursive: true, force: true });
   console.log(`Total duration: ${((performance.now() - startedAt) / 1000).toFixed(1)}s`);
 }
 
