@@ -25,6 +25,15 @@ function toTitle(result) {
 export function createTmdbSource({
   http = request, cache = createCache(), getToken, getLocale = appLocale,
 }) {
+  // Region and configuration data lives for seven days in the persistent cache; when the browser refuses
+  // to store it, it is kept for the current visit instead so that the quota is not spent again.
+  const sessionMemo = new Map();
+  const recall = (key) => cache.get(key) ?? sessionMemo.get(key);
+  function remember(key, value, meta) {
+    cache.set(key, value, meta);
+    if (!cache.get(key)) sessionMemo.set(key, { value });
+  }
+
   async function get(endpoint, params, signal, token = getToken()) {
     if (!token) throw new HttpError('auth');
     const url = new URL(endpoint, baseUrl);
@@ -35,6 +44,8 @@ export function createTmdbSource({
     return http(url.href, {
       headers: { Authorization: `Bearer ${token}` },
       signal,
+      // A Retry-After above the shared wait budget (10 s) is reported as a rate-limit error instead of freezing
+      // the search screen; the search screen then tells the user when to try again.
       retryOn429: 'within-budget',
     });
   }
@@ -64,22 +75,22 @@ export function createTmdbSource({
 
     async listCoveredCountries() {
       const key = 'tmdb.regions';
-      const cached = cache.get(key);
+      const cached = recall(key);
       if (cached) return cached.value;
       const { results } = await get('watch/providers/regions');
       const countries = results.map(({ iso_3166_1 }) => iso_3166_1.toLowerCase());
-      cache.set(key, countries, { kind: 'metadata', source });
+      remember(key, countries, { kind: 'metadata', source });
       return countries;
     },
 
     async getImageConfiguration() {
       const key = 'tmdb.configuration';
-      const cached = cache.get(key);
+      const cached = recall(key);
       if (cached) return cached.value;
       try {
         const { images } = await get('configuration');
         if (!images) return null;
-        cache.set(key, images, { kind: 'config', source });
+        remember(key, images, { kind: 'config', source });
         return images;
       } catch (error) {
         if (error instanceof HttpError) return null;

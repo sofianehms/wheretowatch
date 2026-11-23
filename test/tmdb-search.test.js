@@ -185,3 +185,21 @@ test('allows image configuration fallback after HTTP failure or missing image se
   assert.equal(await source.getImageConfiguration(), null);
   assert.deepEqual(await source.getImageConfiguration(), configuration.images);
 });
+
+test('keeps regions and image configuration for the visit when the cache stores nothing', async () => {
+  const paths = [];
+  const source = createTmdbSource({
+    cache: { get: () => undefined, set() {} },
+    getToken: () => credential,
+    http: async (url) => {
+      const { pathname } = new URL(url);
+      paths.push(pathname);
+      return pathname.endsWith('/regions') ? regions : configuration;
+    },
+  });
+  const codes = await source.listCoveredCountries();
+  assert.deepEqual(await source.listCoveredCountries(), codes);
+  assert.deepEqual(await source.getImageConfiguration(), configuration.images);
+  assert.deepEqual(await source.getImageConfiguration(), configuration.images);
+  assert.deepEqual(paths, ['/3/watch/providers/regions', '/3/configuration']);
+});
