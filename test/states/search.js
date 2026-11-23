@@ -106,6 +106,8 @@ function checkKeyboard(container) {
   return problems;
 }
 
+let fallbackSample = null;
+
 const scenarios = [
   scenario('Search · empty (prompt)', { status: 'idle' }, {}, (container) => {
     const problems = checkCombobox(container, { expanded: false });
@@ -173,6 +175,7 @@ const scenarios = [
   }),
   {
     ...scenario('Search · results, fallback list of links', { status: 'results', query: 'harb', titles: eight }, { fallback: true }, (container) => {
+    fallbackSample = container;
     const problems = [];
     if (container.querySelector('[role="combobox"], [role="listbox"], [role="option"]')) problems.push('the fallback still uses combobox roles');
     const links = container.querySelectorAll('ul a[href]');
@@ -188,10 +191,6 @@ const scenarios = [
         const problems = [];
         if (document.activeElement !== container.querySelector('input')) problems.push('Escape from a link does not return to the field');
         if (!container.querySelector('ul').hidden) problems.push('Escape from a link leaves the list open');
-        // Show the links again so the capture keeps them.
-        container.querySelector('input').dispatchEvent(new Event('input', { bubbles: true }));
-        render(container, { status: 'results', query: 'harb', titles: eight }, handlers(container.log), { fallback: true });
-        if (container.querySelector('ul').hidden) problems.push('the fallback list does not reopen after typing');
         return problems;
       },
     }],
@@ -218,6 +217,21 @@ const scenarios = [
         const problems = [];
         if (!container.querySelector('[role="listbox"]').hidden) problems.push('a real Escape does not close the list');
         if (input.value !== 'harb') problems.push(`a real Escape changed the value to "${input.value}"`);
+        return problems;
+      },
+    }, {
+      // Last step of the page: the other keyboard checks have moved focus and closed the fallback list, so reopen it for the captures.
+      keys: [],
+      after() {
+        const container = fallbackSample;
+        container.querySelector('input').dispatchEvent(new Event('input', { bubbles: true }));
+        render(container, { status: 'results', query: 'harb', titles: eight }, handlers(container.log), { fallback: true });
+        const list = container.querySelector('ul');
+        const links = [...container.querySelectorAll('ul a[href]')];
+        const problems = [];
+        if (list.hidden) problems.push('the fallback list is hidden at capture time');
+        if (links.length !== 8) problems.push(`${links.length} fallback links instead of 8 at capture time`);
+        if (links.some((link) => link.getBoundingClientRect().height === 0)) problems.push('a fallback link is not visible at capture time');
         return problems;
       },
     }],

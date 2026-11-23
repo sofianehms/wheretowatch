@@ -54,13 +54,11 @@ function poster(title, index, configuration) {
     frame.textContent = initials(title.title);
     return frame;
   }
-  // The reserved box comes from the stylesheet; the attributes give the intrinsic ratio.
+  // The reserved 2:3 box and the image size both come from the poster tokens, through the stylesheet.
   const image = el('img', 'poster__image', '', {
     src: source.src,
     srcset: source.srcset,
     alt: '',
-    width: '48',
-    height: '72',
     loading: index < EAGER_POSTERS ? 'eager' : 'lazy',
     decoding: 'async',
   });
