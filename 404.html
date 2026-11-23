@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https://image.tmdb.org data:; connect-src https://api.themoviedb.org https://api.movieofthenight.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Page not found · wheretowatch</title>
+  <meta name="description" content="This page does not exist. Go back to the wheretowatch home page to search a movie or series.">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="design/tokens.css">
+  <link rel="stylesheet" href="src/styles.css">
+  <link rel="stylesheet" href="src/styles/not-found.css">
+  <script src="src/theme-boot.js"></script>
+</head>
+<body>
+  <div class="page">
+    <header class="app-header">
+      <a class="brand" href="./"><svg class="mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="mark__pin" d="M12 1.5a8 8 0 0 0-8 8c0 5.6 8 13 8 13s8-7.4 8-13a8 8 0 0 0-8-8z"/><path class="mark__play" d="M10 6.2v6.6l5.2-3.3z"/></svg><span>wheretowatch</span></a>
+    </header>
+    <main id="main" class="column not-found">
+      <h1>Page not found</h1>
+      <p class="muted">There is nothing at this address. The link may be broken or the page may have moved.</p>
+      <a class="btn btn--primary" href="./">Back to search</a>
+    </main>
+  </div>
+</body>
+</html>

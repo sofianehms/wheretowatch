@@ -59,7 +59,7 @@ test('static translations replace existing root text and descendant attributes',
 
   applyStaticStrings(root);
 
-  assert.equal(root.textContent, 'Where to Watch');
+  assert.equal(root.textContent, 'wheretowatch');
   assert.equal(attributes.get('placeholder'), 'Search');
   assert.equal(input.textContent, 'Existing text');
 });

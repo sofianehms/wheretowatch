@@ -13,6 +13,13 @@ const MIME = {
   '.woff2': 'font/woff2',
 };
 
+// The 404 page is served at any depth (/missing/deep), where its relative links would resolve
+// against the missing folder. Anchor them at the instance root (prefix included) instead.
+export function rootRelative(html, prefix = '') {
+  return html.replace(/\b(href|src)="(?![a-z][a-z0-9+.-]*:|\/|#)(?:\.\/)?([^"]*)"/gi,
+    (match, attr, rest) => `${attr}="${prefix}/${rest}"`);
+}
+
 export function startServer(root, port = 0, { prefix = '' } = {}) {
   const base = path.resolve(root);
   const server = http.createServer((req, res) => {
@@ -30,7 +37,7 @@ export function startServer(root, port = 0, { prefix = '' } = {}) {
       if (err) {
         const nf = path.join(base, '404.html');
         res.writeHead(404, { 'Content-Type': MIME['.html'] });
-        res.end(fs.existsSync(nf) ? fs.readFileSync(nf) : 'Not found');
+        res.end(fs.existsSync(nf) ? rootRelative(fs.readFileSync(nf, 'utf8'), prefix) : 'Not found');
         return;
       }
       res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
