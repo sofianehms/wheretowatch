@@ -238,12 +238,9 @@ function build(container, fallback) {
     } else if (status === 'error') {
       const auth = state.error?.type === 'auth';
       const body = el('div', 'listbox__note');
-      const message = el('p', '', '', { role: 'alert' });
-      message.append(
-        el('strong', '', t('search.error.title')),
-        document.createElement('br'),
-        t(errorTexts[state.error?.type] ?? 'search.error.default'),
-      );
+      const detail = t(errorTexts[state.error?.type] ?? 'search.error.default');
+      const message = el('p');
+      message.append(el('strong', '', t('search.error.title')), document.createElement('br'), detail);
       const action = el('button', 'btn btn--secondary', '', { type: 'button' });
       if (auth) action.append(t('search.checkKey'));
       else action.append(icon('refresh', 'sm'), t('search.retry'));
@@ -253,7 +250,7 @@ function build(container, fallback) {
       });
       body.append(message, action);
       note(body);
-      announce('');
+      announce(`${t('search.error.title')} ${detail}`);
     } else {
       titles = state.titles.slice(0, MAX_SUGGESTIONS);
       note();

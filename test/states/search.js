@@ -164,18 +164,22 @@ const scenarios = [
     if (button?.textContent !== 'Retry') problems.push('the Retry action is missing');
     button?.click();
     if (!container.log.some(([name, value]) => name === 'retry' && value === 'harb')) problems.push('Retry does not call back');
-    const alert = container.querySelector('[role="alert"]');
-    if (!alert?.textContent.includes('Search failed.') || !alert.textContent.includes('did not answer in time')) problems.push('the error is not exposed as an alert with its detail');
+    if (live(container) !== 'Search failed. TMDB did not answer in time. Try again.') problems.push(`the polite region does not announce the error: “${live(container)}”`);
+    if (button && button.getBoundingClientRect().height < 44) problems.push('the Retry action is not visible or is under 44 px');
     if (container.querySelector('[role="status"]')?.getAttribute('aria-live') !== 'polite') problems.push('the status region is not polite');
     return problems;
   }),
   scenario('Search · error, key refused', { status: 'error', query: 'harb', error: new HttpError('auth') }, {}, (container) => {
     const button = container.querySelector('.listbox button');
     if (button?.textContent !== 'Check your key') return ['the Check your key action is missing'];
+    const problems = [];
+    if (live(container) !== 'Search failed. TMDB refused your key.') problems.push(`the polite region does not announce the refusal: “${live(container)}”`);
+    if (button.getBoundingClientRect().height < 44) problems.push('the Check your key action is not visible or is under 44 px');
+    button.focus();
+    if (document.activeElement !== button) problems.push('the Check your key action cannot take keyboard focus');
     button.click();
-    const alert = container.querySelector('[role="alert"]');
-    if (!alert?.textContent.includes('Search failed.')) return ['the refused key is not exposed as an alert'];
-    return container.log.some(([name]) => name === 'key') ? [] : ['Check your key does not call back'];
+    if (!container.log.some(([name]) => name === 'key')) problems.push('Check your key does not call back');
+    return problems;
   }),
   scenario('Search · offline', { status: 'idle', online: false }, {}, (container) => {
     const problems = [];
@@ -266,6 +270,13 @@ export function check() {
   const image = withPoster.querySelector('.poster img');
   if (!image || !image.getAttribute('src')?.endsWith('/poster.jpg')) problems.push('a suggestion with a poster does not render its image');
   withPoster.remove();
+  const many = document.createElement('div');
+  document.body.append(many);
+  const posters = Array.from({ length: 8 }, (_, i) => ({ ...title(`Poster ${i}`, 2020, 'movie', 40 + i), posterPath: `/p${i}.jpg` }));
+  render(many, { status: 'results', query: 'p', titles: posters }, handlers());
+  const modes = [...many.querySelectorAll('.poster img')].map((img) => img.getAttribute('loading'));
+  if (modes[0] !== 'eager' || modes.at(-1) !== 'lazy') problems.push(`posters in later rows are not lazy-loaded (${modes.join(', ')})`);
+  many.remove();
 
   // Tab during loading must not let late suggestions open; going offline keeps the notice visible.
   const flow = document.createElement('div');
