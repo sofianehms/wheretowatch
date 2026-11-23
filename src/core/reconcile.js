@@ -18,7 +18,7 @@ function collect({ snapshots, coverage }) {
     const snapshot = snapshotsBySource.get(id);
     const countries = readCoverage(coverage[id]);
     const recognizesTitle = snapshot?.status === 'offers' || snapshot?.status === 'empty';
-    sources[id] = { countries, recognizesTitle };
+    sources[id] = { countries, recognizesTitle, coverage: coverage[id] };
     fetchedAt[id] = snapshot?.fetchedAt ?? null;
 
     if (!countries || !recognizesTitle) continue;
@@ -64,7 +64,15 @@ function summarize(byCountry, { coveredCountries, fetchedAt, sources }) {
       fetchedAt: { ...fetchedAt },
     });
   }
-  return { countries, coveredCountries: new Set(coveredCountries), confirmedCount };
+  const coverage = Object.fromEntries(sourceIds.map((id) => {
+    const source = sources[id];
+    return [id, {
+      status: source.coverage?.status ?? 'unknown',
+      countries: source.countries,
+      fetchedAt: source.coverage?.fetchedAt ?? null,
+    }];
+  }));
+  return { countries, coveredCountries: new Set(coveredCountries), confirmedCount, coverage };
 }
 
 /**
