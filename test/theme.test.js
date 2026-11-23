@@ -64,6 +64,18 @@ test('theme-boot.js sets data-theme and fills theme-color from the computed --co
   assert.equal(run('throw')['data-theme'], 'dark');
 });
 
+test('theme-boot.js resolves the relative canonical link to an absolute URL without query or hash', () => {
+  const attrs = {};
+  const link = { href: 'https://example.test/wheretowatch/?q=dune#x', setAttribute: (k, v) => { attrs[k] = v; } };
+  vm.runInNewContext(boot, {
+    window: {},
+    document: { documentElement: { setAttribute() {} }, querySelector: (selector) => (selector.includes('canonical') ? link : null) },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    localStorage: { getItem: () => null },
+  });
+  assert.equal(attrs.href, 'https://example.test/wheretowatch/');
+});
+
 test('theme.js and theme-boot.js share the storage key, the values and the default', () => {
   assert.equal(THEME_KEY, 'wtw.theme');
   assert.match(boot, new RegExp(`'${THEME_KEY.replace('.', '\\.')}'`));
