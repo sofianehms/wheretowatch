@@ -134,6 +134,8 @@ function themeScenario(name, label, value, { stored } = {}) {
       const radios = [...container.querySelectorAll('fieldset.segmented input[type="radio"]')];
       if (radios.length !== 3) return [...problems, `${radios.length} theme choices`];
       if (new Set(radios.map((radio) => radio.name)).size !== 1) problems.push('the choices are not one radio group');
+      // Keyboard operability: native radios, reachable by Tab and arrow keys, never removed from the tab order.
+      if (radios.some((radio) => radio.disabled || radio.tabIndex < 0 || radio.hidden || radio.closest('[hidden], [inert]'))) problems.push('a theme choice cannot be reached with the keyboard');
       const choice = radios.find((radio) => radio.value === value);
       if (!choice.labels?.[0]?.textContent.includes(label)) problems.push(`the ${value} choice is not labelled ${label}`);
       if (!container.querySelector('fieldset legend')) problems.push('the group has no legend');
@@ -173,6 +175,21 @@ const failedSaveScenario = {
     // A later successful save clears the failed-save state.
     storage.setItem = working;
     radios.find((radio) => radio.value === 'auto').dispatchEvent(new Event('change', { bubbles: true }));
+    if (container.reopened.root.querySelector('.key-state--bad[role="status"]')?.hidden !== true) problems.push('the save warning stays after a successful retry');
+    // A failed save followed by "Clear my data" must not leak the unsaved choice into the next Settings.
+    storage.setItem = () => { throw new Error('storage full'); };
+    container.reopened.root.remove();
+    const failing = mount(container, { storage });
+    failing.root.querySelector('input[value="light"]').dispatchEvent(new Event('change', { bubbles: true }));
+    storage.setItem = working;
+    buttonNamed(failing.root, 'Clear my data').click();
+    buttonNamed(failing.root, 'Clear data').click();
+    failing.root.remove();
+    const afterClear = mount(container, { storage });
+    const left = [...afterClear.root.querySelectorAll('fieldset.segmented input[type="radio"]')].filter((radio) => radio.checked).map((radio) => radio.value);
+    if (left.join() !== 'dark') problems.push(`Settings after erasure selects ${left}, not dark`);
+    if (afterClear.root.querySelector('.key-state--bad[role="status"]')?.hidden !== true) problems.push('the save warning survives the erasure');
+    container.reopened = afterClear;
     if (previous === null) document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', previous);
     container.problems = problems;

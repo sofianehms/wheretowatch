@@ -345,6 +345,7 @@ export function renderSettings({ settings, checkKey, quotaLimit, durable = true,
       onCancel: () => closeDialog(),
       onConfirm() {
         settings.clearAll();
+        unsavedTheme = null;
         tmdb.abort();
         sa.abort();
         closeDialog({ restoreFocus: false });
