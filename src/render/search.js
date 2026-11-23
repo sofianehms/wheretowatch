@@ -293,6 +293,10 @@ function build(container, fallback) {
 
   function clearField() {
     input.value = '';
+    // The suggestions belong to the cleared query: drop them here, since the cancellation callback is
+    // optional, so arrows and Enter cannot reopen or choose them.
+    state = { status: 'idle', online: state.online, imageConfiguration: state.imageConfiguration };
+    showStatus();
     // An emptied field shows nothing, whatever the cancellation callback renders next.
     dismissed = true;
     syncClear();

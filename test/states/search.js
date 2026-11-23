@@ -95,6 +95,12 @@ function checkKeyboard(container) {
   if (!list.hidden) problems.push('a results update reopens the list after Tab dismissed it');
   press(input, 'Escape');
   if (input.value !== '' || !log.some(([name]) => name === 'cancel')) problems.push('Escape on a closed list does not clear the field');
+  // The cancellation callback here renders nothing: the old suggestions must still be gone.
+  const chosenBefore = log.filter(([name]) => name === 'choose').length;
+  press(input, 'ArrowDown');
+  if (!list.hidden || list.children.length || input.getAttribute('aria-expanded') !== 'false') problems.push('ArrowDown after clearing reopens the old suggestions');
+  press(input, 'Enter');
+  if (log.filter(([name]) => name === 'choose').length !== chosenBefore) problems.push('Enter after clearing chooses an old suggestion');
   // The clear button empties the field and keeps the list closed even if the callback renders nothing.
   render(container, { status: 'results', query: 'harb', titles: eight }, handlers(log));
   input.value = 'harb';
@@ -105,6 +111,7 @@ function checkKeyboard(container) {
   input.value = 'harb';
   press(input, 'Enter');
   if (!log.some(([name, value]) => name === 'submit' && value === 'harb')) problems.push('Enter without an active option does not submit');
+  render(container, { status: 'results', query: 'harb', titles: eight }, handlers(log));
   container.querySelectorAll('[role="option"]')[2].click();
   if (!log.some(([name, value]) => name === 'choose' && value === 'The Harbour')) problems.push('clicking an option does not choose it');
   // Leave the field filled and the list open for the capture.
@@ -114,6 +121,7 @@ function checkKeyboard(container) {
 }
 
 let fallbackSample = null;
+let authSample = null;
 
 const scenarios = [
   scenario('Search · empty (prompt)', { status: 'idle' }, {}, (container) => {
@@ -170,6 +178,7 @@ const scenarios = [
     return problems;
   }),
   scenario('Search · error, key refused', { status: 'error', query: 'harb', error: new HttpError('auth') }, {}, (container) => {
+    authSample = container;
     const button = container.querySelector('.listbox button');
     if (button?.textContent !== 'Check your key') return ['the Check your key action is missing'];
     const problems = [];
@@ -247,6 +256,11 @@ const scenarios = [
         if (list.hidden) problems.push('the fallback list is hidden at capture time');
         if (links.length !== 8) problems.push(`${links.length} fallback links instead of 8 at capture time`);
         if (links.some((link) => link.getBoundingClientRect().height === 0)) problems.push('a fallback link is not visible at capture time');
+        // The key-refused check moved focus away, which dismissed its panel: show it again for the captures.
+        authSample.querySelector('input').dispatchEvent(new Event('input', { bubbles: true }));
+        render(authSample, { status: 'error', query: 'harb', error: new HttpError('auth') }, handlers(authSample.log));
+        const action = authSample.querySelector('.listbox button');
+        if (!action || action.getBoundingClientRect().height === 0) problems.push('the key-refused panel is hidden at capture time');
         return problems;
       },
     }],
