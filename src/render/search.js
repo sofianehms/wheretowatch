@@ -238,7 +238,7 @@ function build(container, fallback) {
     } else if (status === 'error') {
       const auth = state.error?.type === 'auth';
       const body = el('div', 'listbox__note');
-      const message = el('p');
+      const message = el('p', '', '', { role: 'alert' });
       message.append(
         el('strong', '', t('search.error.title')),
         document.createElement('br'),
@@ -253,7 +253,7 @@ function build(container, fallback) {
       });
       body.append(message, action);
       note(body);
-      announce(t('search.error.title'));
+      announce('');
     } else {
       titles = state.titles.slice(0, MAX_SUGGESTIONS);
       note();
@@ -296,8 +296,10 @@ function build(container, fallback) {
 
   function clearField() {
     input.value = '';
-    dismissed = false;
+    // An emptied field shows nothing, whatever the cancellation callback renders next.
+    dismissed = true;
     syncClear();
+    setOpen(false);
     handlers.onCancel?.();
   }
 

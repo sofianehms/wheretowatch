@@ -95,6 +95,13 @@ function checkKeyboard(container) {
   if (!list.hidden) problems.push('a results update reopens the list after Tab dismissed it');
   press(input, 'Escape');
   if (input.value !== '' || !log.some(([name]) => name === 'cancel')) problems.push('Escape on a closed list does not clear the field');
+  // The clear button empties the field and keeps the list closed even if the callback renders nothing.
+  render(container, { status: 'results', query: 'harb', titles: eight }, handlers(log));
+  input.value = 'harb';
+  input.focus();
+  press(input, 'ArrowDown');
+  container.querySelector('.search__field button').click();
+  if (input.value !== '' || !list.hidden || input.getAttribute('aria-expanded') !== 'false') problems.push('the clear button leaves the list open');
   input.value = 'harb';
   press(input, 'Enter');
   if (!log.some(([name, value]) => name === 'submit' && value === 'harb')) problems.push('Enter without an active option does not submit');
@@ -157,13 +164,17 @@ const scenarios = [
     if (button?.textContent !== 'Retry') problems.push('the Retry action is missing');
     button?.click();
     if (!container.log.some(([name, value]) => name === 'retry' && value === 'harb')) problems.push('Retry does not call back');
-    if (live(container) !== 'Search failed.') problems.push('the error is not announced');
+    const alert = container.querySelector('[role="alert"]');
+    if (!alert?.textContent.includes('Search failed.') || !alert.textContent.includes('did not answer in time')) problems.push('the error is not exposed as an alert with its detail');
+    if (container.querySelector('[role="status"]')?.getAttribute('aria-live') !== 'polite') problems.push('the status region is not polite');
     return problems;
   }),
   scenario('Search · error, key refused', { status: 'error', query: 'harb', error: new HttpError('auth') }, {}, (container) => {
     const button = container.querySelector('.listbox button');
     if (button?.textContent !== 'Check your key') return ['the Check your key action is missing'];
     button.click();
+    const alert = container.querySelector('[role="alert"]');
+    if (!alert?.textContent.includes('Search failed.')) return ['the refused key is not exposed as an alert'];
     return container.log.some(([name]) => name === 'key') ? [] : ['Check your key does not call back'];
   }),
   scenario('Search · offline', { status: 'idle', online: false }, {}, (container) => {
