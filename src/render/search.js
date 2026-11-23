@@ -188,7 +188,11 @@ function build(container, fallback) {
   }
 
   function choose(title) {
+    // Activating a suggestion closes the list for good, whichever control took the activation:
+    // the field takes the focus back so it never stays on a link that has just been hidden.
+    dismissed = true;
     setOpen(false);
+    if (root.contains(document.activeElement) && document.activeElement !== input) input.focus();
     handlers.onChoose?.(title);
   }
 

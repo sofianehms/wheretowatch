@@ -22,7 +22,7 @@ test('compose builds the services around one storage', () => {
   for (const name of ['store', 'cache', 'quota', 'settings', 'sources', 'checkKey']) assert.ok(app[name], name);
   assert.equal(app.store.get().settingsOpen, false);
   assert.equal(app.quotaLimit(), 1000);
-  assert.equal(app.sources.searchSource, null);
+  assert.equal(app.sources.searchSource?.id, 'tmdb');
 
   assert.equal(app.durable, true);
 
