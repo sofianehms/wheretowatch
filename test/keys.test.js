@@ -126,6 +126,22 @@ test('clearAll removes all app entries, clears in-memory cache, and resets quota
   assert.equal(quota.canCall(), true);
 });
 
+test('clearAll removes every app entry even when removal reorders the keys', () => {
+  const { data, storage } = fixture();
+  storage.removeItem = (name) => {
+    if (!data.delete(name)) return;
+    const rest = [...data].reverse();
+    data.clear();
+    for (const [key, value] of rest) data.set(key, value);
+  };
+  const settings = createSettings({ storage });
+  for (const name of ['wtw.key.tmdb', 'wtw.review', 'wtw.a', 'wtw.b', 'other.review']) storage.setItem(name, 'x');
+
+  settings.clearAll();
+
+  assert.deepEqual([...data.keys()], ['other.review']);
+});
+
 test('clearAll removes other app entries when one removal fails', () => {
   const { data, storage } = fixture();
   const removeItem = storage.removeItem;

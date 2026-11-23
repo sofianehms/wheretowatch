@@ -67,6 +67,7 @@ test('boundary rejects direct and indirect module declarations in app layers and
     'src/settings/keys.js',
     'src/state.js',
     'src/main.js',
+    'src/app.js',
   ]) {
     assert.equal(violations(file, declarations).length, 5, file);
   }

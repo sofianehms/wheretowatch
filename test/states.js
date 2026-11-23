@@ -17,6 +17,10 @@ function checkTargets(container) {
       }
       continue;
     }
+    // WCAG 2.5.8: a link inside a sentence is exempt from the minimum target size.
+    const insideSentence = target.localName === 'a' && getComputedStyle(target).display === 'inline'
+      && [...target.parentElement.childNodes].some((node) => node !== target && node.textContent.trim());
+    if (insideSentence) continue;
     const { width, height } = target.getBoundingClientRect();
     if (width < minimumTargetSize || height < minimumTargetSize) {
       const label = target.getAttribute('aria-label') || target.textContent.trim() || target.id;
