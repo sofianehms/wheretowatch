@@ -50,7 +50,7 @@ test('theme-boot.js sets data-theme and fills theme-color from the computed --co
     const root = { setAttribute: (k, v) => { attrs[k] = v; } };
     const sandbox = {
       window: {},
-      document: { documentElement: root, querySelector: () => meta },
+      document: { documentElement: root, querySelector: (selector) => (selector.includes('theme-color') ? meta : null) },
       getComputedStyle: () => ({ getPropertyValue: () => ' sample-bg ' }),
       localStorage: { getItem: () => { if (stored === 'throw') throw new Error('denied'); return stored; } },
     };
@@ -62,6 +62,18 @@ test('theme-boot.js sets data-theme and fills theme-color from the computed --co
   assert.equal(run('auto')['data-theme'], 'auto');
   assert.equal(run('bogus')['data-theme'], 'dark');
   assert.equal(run('throw')['data-theme'], 'dark');
+});
+
+test('theme-boot.js resolves the relative canonical link to an absolute URL without query or hash', () => {
+  const attrs = {};
+  const link = { href: 'https://example.test/wheretowatch/?q=dune#x', setAttribute: (k, v) => { attrs[k] = v; } };
+  vm.runInNewContext(boot, {
+    window: {},
+    document: { documentElement: { setAttribute() {} }, querySelector: (selector) => (selector.includes('canonical') ? link : null) },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    localStorage: { getItem: () => null },
+  });
+  assert.equal(attrs.href, 'https://example.test/wheretowatch/');
 });
 
 test('theme.js and theme-boot.js share the storage key, the values and the default', () => {

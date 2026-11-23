@@ -1,6 +1,6 @@
 {
-  "name": "Where to Watch",
-  "short_name": "Where to Watch",
+  "name": "wheretowatch",
+  "short_name": "wheretowatch",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#141414",
