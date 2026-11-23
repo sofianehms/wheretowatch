@@ -3,7 +3,11 @@ import { formatNumber, t } from '../i18n/strings.js';
 import { applyTheme, THEMES } from '../theme.js';
 import { el, externalLink, icon, richText, uniqueId } from './dom.js';
 
+// Theme choice applied but not saved, kept so reopening Settings stays in sync with the page.
+let unsavedTheme = null;
+
 // Look and icon of each key status (a text label and an icon, never color alone).
+
 const statusLook = {
   saved: ['ok', 'checkCircle'],
   valid: ['ok', 'checkCircle'],
@@ -298,19 +302,26 @@ export function renderSettings({ settings, checkKey, quotaLimit, durable = true,
   const themeName = uniqueId('theme');
   const themeNote = el('p', 'key-state key-state--bad', '', { role: 'status' });
   themeNote.hidden = true;
+  // A choice that applied but could not be saved stays selected, with its warning, when Settings reopens.
+  const shown = unsavedTheme ?? settings.getPref('theme');
+  const showSaveError = () => {
+    themeNote.replaceChildren(icon('alert', 'sm'), t('settings.theme.error'));
+    themeNote.hidden = false;
+  };
+  if (unsavedTheme) showSaveError();
   for (const value of THEMES) {
     const label = el('label');
     const radio = el('input', '', '', { type: 'radio', name: themeName, value });
-    radio.checked = settings.getPref('theme') === value;
+    radio.checked = shown === value;
     radio.addEventListener('change', () => {
       applyTheme(value, root.ownerDocument);
-      themeNote.replaceChildren();
       try {
         settings.setPref('theme', value);
+        unsavedTheme = null;
         themeNote.hidden = true;
       } catch {
-        themeNote.append(icon('alert', 'sm'), t('settings.theme.error'));
-        themeNote.hidden = false;
+        unsavedTheme = value;
+        showSaveError();
       }
     });
     label.append(radio, t(`settings.theme.${value}`));

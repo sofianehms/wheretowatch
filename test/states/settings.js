@@ -152,7 +152,36 @@ function themeScenario(name, label, value, { stored } = {}) {
   };
 }
 
+// A save that fails still applies the choice; reopening Settings must show that choice and the warning.
+// The whole sequence runs while rendering so the shared failed-save state never reaches other scenarios.
+const failedSaveScenario = {
+  name: 'Settings · theme save failed, reopened',
+  render(container) {
+    const problems = [];
+    const previous = document.documentElement.getAttribute('data-theme');
+    const storage = memoryStorage({ 'wtw.theme': 'auto' });
+    const working = storage.setItem;
+    storage.setItem = () => { throw new Error('storage full'); };
+    const first = mount(container, { storage });
+    first.root.querySelector('input[value="dark"]').dispatchEvent(new Event('change', { bubbles: true }));
+    first.root.remove();
+    container.reopened = mount(container, { storage });
+    const radios = [...container.reopened.root.querySelectorAll('fieldset.segmented input[type="radio"]')];
+    const checked = radios.filter((radio) => radio.checked).map((radio) => radio.value);
+    if (checked.join() !== 'dark') problems.push(`reopened Settings selects ${checked}, not the applied dark`);
+    if (container.reopened.root.querySelector('.key-state--bad[role="status"]')?.hidden !== false) problems.push('the save warning is gone after reopening');
+    // A later successful save clears the failed-save state.
+    storage.setItem = working;
+    radios.find((radio) => radio.value === 'auto').dispatchEvent(new Event('change', { bubbles: true }));
+    if (previous === null) document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', previous);
+    container.problems = problems;
+  },
+  check: (container) => container.problems,
+};
+
 const scenarios = [
+  failedSaveScenario,
   themeScenario('Settings · dark theme chosen', 'Dark', 'dark', { stored: 'light' }),
   themeScenario('Settings · light theme chosen', 'Light', 'light'),
   themeScenario('Settings · auto theme chosen', 'Auto', 'auto'),
