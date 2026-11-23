@@ -39,6 +39,7 @@ import { HttpError } from './http.js';
  * @property {string} source Source ID.
  * @property {'offers'|'empty'|'notFound'|'unavailable'} status
  * @property {string} fetchedAt ISO 8601 timestamp.
+ * @property {boolean} [stale] Whether the snapshot was served from stale cache.
  * @property {number|null} coveredCountries Country count, null when unknown.
  * @property {Offer[]} offers
  * @property {Error|null} error
