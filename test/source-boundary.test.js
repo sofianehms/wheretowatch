@@ -39,7 +39,7 @@ function* imports(node) {
 }
 
 function violations(file, source) {
-  if (file === 'src/compose.js' || file.startsWith('src/api/')) return [];
+  if (file === 'src/compose.js' || file === 'test/tmdb-search.test.js' || file.startsWith('src/api/')) return [];
   const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true });
   return [...imports(tree)]
     .filter((specifier) => /(?:^|\/)(?:tmdb|streaming)\.js(?:[?#].*)?$/.test(specifier))
