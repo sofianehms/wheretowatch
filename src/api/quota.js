@@ -6,6 +6,11 @@ export const DEFAULT_QUOTA_CONFIG = Object.freeze({
 
 const storageKey = 'wtw.quota';
 
+function quotaNumber(headers, name) {
+  const value = headers.get(name);
+  return value && /^\d+$/.test(value) ? Number(value) : NaN;
+}
+
 function monthBoundary(year, month, day) {
   const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   return Date.UTC(year, month, Math.min(day, lastDay));
@@ -35,23 +40,27 @@ export function createQuota({ storage, now = Date.now, config = {} }) {
       state = null;
     }
 
-    if (state?.cycleStart !== cycleStart ||
+    const serverCycle = Number.isFinite(state?.serverReset) &&
+      Number.isSafeInteger(state.serverLimit) && state.serverLimit > 0;
+    if ((serverCycle ? state.serverReset <= date.getTime() : state?.cycleStart !== cycleStart) ||
+        (!serverCycle && (state?.serverReset !== undefined || state?.serverLimit !== undefined)) ||
         !Number.isSafeInteger(state.used) || state.used < 0 ||
         typeof state.exhausted !== 'boolean') {
       state = empty;
       if (stored !== null) save(state);
     }
 
-    return { state, nextReset };
+    return { state, nextReset: state.serverReset ?? nextReset };
   }
 
   function status() {
-    const { state: { used, exhausted, cycleStart }, nextReset } = currentCycle();
+    const { state: { used, exhausted, cycleStart, serverLimit }, nextReset } = currentCycle();
+    const activeLimit = serverLimit ?? limit;
     return {
       used,
-      limit,
-      warn: used / limit >= warnRatio,
-      blocked: exhausted || used >= limit,
+      limit: activeLimit,
+      warn: used / activeLimit >= warnRatio,
+      blocked: exhausted || used >= activeLimit,
       cycleStart,
       nextReset,
     };
@@ -62,6 +71,22 @@ export function createQuota({ storage, now = Date.now, config = {} }) {
     record() {
       const { state } = currentCycle();
       save({ ...state, used: state.used + 1 });
+    },
+    sync(headers) {
+      const serverLimit = quotaNumber(headers, 'x-quota-granted');
+      const used = quotaNumber(headers, 'x-quota-used');
+      const serverReset = Date.parse(headers.get('x-quota-reset'));
+      if (!Number.isSafeInteger(serverLimit) || serverLimit < 1 || !Number.isSafeInteger(used) ||
+          !Number.isFinite(serverReset) || serverReset <= now()) return;
+      const { state } = currentCycle();
+      if (state.serverReset > serverReset) return;
+      save({
+        ...state,
+        // Keep charges already recorded for overlapping requests in the current cycle.
+        used: state.serverReset && state.serverReset !== serverReset ? used : Math.max(used, state.used),
+        serverLimit,
+        serverReset,
+      });
     },
     markExhausted() {
       const { state } = currentCycle();

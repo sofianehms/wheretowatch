@@ -7,6 +7,11 @@ import { parse } from 'acorn';
 
 const repository = fileURLToPath(new URL('../', import.meta.url));
 const ignoredDirectories = new Set(['.git', '.verify', 'node_modules']);
+const clientUnitTests = new Set([
+  'test/tmdb-search.test.js',
+  'test/tmdb-availability.test.js',
+  'test/streaming.test.js',
+]);
 
 function* moduleFiles(directory = '') {
   for (const entry of readdirSync(join(repository, directory), { withFileTypes: true })) {
@@ -39,8 +44,7 @@ function* imports(node) {
 }
 
 function violations(file, source) {
-  const adapterTests = ['test/tmdb-search.test.js', 'test/tmdb-availability.test.js'];
-  if (file === 'src/compose.js' || adapterTests.includes(file) || file.startsWith('src/api/')) return [];
+  if (file === 'src/compose.js' || clientUnitTests.has(file) || file.startsWith('src/api/')) return [];
   const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true });
   return [...imports(tree)]
     .filter((specifier) => /(?:^|\/)(?:tmdb|streaming)\.js(?:[?#].*)?$/.test(specifier))

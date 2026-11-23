@@ -94,12 +94,13 @@ function failureType(status) {
  */
 export async function request(url, {
   headers, signal, timeoutMs = MAX_WAIT_MS, retryOn429 = false,
-  fetchImpl = globalThis.fetch, sleep = delay,
+  fetchImpl = globalThis.fetch, sleep = delay, onResponse, redirect,
 } = {}) {
   const attempt = () => run(url, signal, Math.min(timeoutMs, MAX_WAIT_MS), async (active) => {
     try {
       if (globalThis.navigator?.onLine === false) return { type: 'offline' };
-      const response = await fetchImpl(url, { headers, signal: active });
+      const response = await fetchImpl(url, { headers, signal: active, ...(redirect && { redirect }) });
+      onResponse?.(response.headers);
       if (response.ok) return { data: await response.json() };
 
       const { status } = response;
