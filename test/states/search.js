@@ -19,6 +19,7 @@ const eight = [
 ];
 
 const press = (input, key) => input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+const hrefFor = (chosen) => `/wheretowatch/#/title/${chosen.ref}`;
 const handlers = (log = []) => ({
   onInput: (value) => log.push(['input', value]),
   onSubmit: (value) => log.push(['submit', value]),
@@ -26,6 +27,7 @@ const handlers = (log = []) => ({
   onRetry: (value) => log.push(['retry', value]),
   onCheckKey: () => log.push(['key']),
   onCancel: () => log.push(['cancel']),
+  hrefFor,
 });
 
 // The production popover is absolute from the desktop width: keep the room it covers so it does not overlap the next sample.
@@ -204,10 +206,28 @@ const scenarios = [
     if (container.querySelector('[role="combobox"], [role="listbox"], [role="option"]')) problems.push('the fallback still uses combobox roles');
     const links = container.querySelectorAll('ul a[href]');
     if (links.length !== 8) problems.push(`${links.length} links instead of 8`);
+    links.forEach((link, index) => {
+      const expected = `/wheretowatch/#/title/${eight[index].ref}`;
+      if (link.getAttribute('href') !== expected) problems.push(`link ${index + 1} points to "${link.getAttribute('href')}" instead of "${expected}"`);
+    });
     return problems;
   }),
     realKeys: [{
       before(container) {
+        container.querySelector('ul a[href]').focus();
+      },
+      keys: ['Enter'],
+      after(container) {
+        const problems = [];
+        if (document.activeElement !== container.querySelector('input')) problems.push('Enter on a link leaves the focus off the field');
+        if (!container.querySelector('ul').hidden) problems.push('Enter on a link leaves the list open');
+        if (!container.log.some(([name, value]) => name === 'choose' && value === 'Harbour Lights')) problems.push('Enter on a link does not choose the title');
+        return problems;
+      },
+    }, {
+      before(container) {
+        container.querySelector('input').dispatchEvent(new Event('input', { bubbles: true }));
+        render(container, { status: 'results', query: 'harb', titles: eight }, handlers(container.log), { fallback: true });
         container.querySelector('ul a[href]').focus();
       },
       keys: ['Escape'],
