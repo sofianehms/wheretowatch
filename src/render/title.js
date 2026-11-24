@@ -93,21 +93,22 @@ function detailLine(verdict) {
   return parts.join(' · ');
 }
 
-function banner(key, params) {
+function banner(key, params, text = 'text') {
   const box = el('div', 'banner banner--caution', '', { role: 'note' });
   const body = el('div');
-  body.append(el('span', 'banner__title', t(`title.banner.${key}.title`)), t(`title.banner.${key}.text`, params));
+  body.append(el('span', 'banner__title', t(`title.banner.${key}.title`)), t(`title.banner.${key}.${text}`, params));
   box.append(icon('info'), body);
   return box;
 }
 
-function notices(verdict) {
+// What is uncertain about the sources, for the single-service card and the "All services" one.
+function notices(verdict, { all = false } = {}) {
   const boxes = [];
   for (const note of verdict.perSourceNotes) {
     if (note.status === 'unavailable') continue;
     const source = sourceName(note.source);
     if (note.status === 'notFound') boxes.push(banner('notRecognized', { source }));
-    if (note.coverage === 'unknown') boxes.push(banner('coverageUnknown', { source }));
+    if (note.coverage === 'unknown') boxes.push(banner('coverageUnknown', { source }, all ? 'allText' : 'text'));
     if (note.coverage === 'stale' && note.status !== 'notFound') {
       boxes.push(banner('coverageStale', { source, date: formatDate(new Date(note.coverageFetchedAt)) }));
     }
@@ -124,6 +125,11 @@ function homeRow(verdict) {
   status.append(icon(homeIcons[home.kind], 'sm'), t(`title.home.${home.kind}`, { service }));
   line.append(where, status);
   return line;
+}
+
+function sourceNotes(verdict, options) {
+  const uncovered = verdict.home?.saNotCovered ? [el('p', 'muted', t('title.home.saNotCovered'))] : [];
+  return [...uncovered, ...notices(verdict, options)];
 }
 
 function verdictCard(verdict, handlers, title, reconciled) {
@@ -180,8 +186,7 @@ function verdictCard(verdict, handlers, title, reconciled) {
     card.append(el('h2', 'verdict__headline', headline, { id }), el('p', 'verdict__detail', detailLine(verdict)));
     if (verdict.kind === 'notFound') body.append(el('p', 'muted', t('verdict.limit', { service: verdict.service })));
   }
-  if (verdict.home?.saNotCovered) body.append(el('p', 'muted', t('title.home.saNotCovered')));
-  body.append(...notices(verdict));
+  body.append(...sourceNotes(verdict));
   if (body.childElementCount > 0) card.append(body);
   return card;
 }
@@ -354,7 +359,7 @@ const controllers = new WeakMap();
  *   reconciled?: ReturnType<typeof import('../core/reconcile.js').reconcile>,
  *   imageConfiguration?: object|null,
  *   services?: {options: {key: string, name: string}[], selected: string,
- *     all?: {reconciledAll: Map<string, object>, home: string|null}}}} state
+ *     all?: {reconciledAll: Map<string, object>, offers: object[], home: string|null}}}} state
  * @param {{onRetry?: () => void, onCheckKeys?: () => void, onServiceChange?: (key: string) => void}} [handlers]
  */
 export function renderTitle(container, state, handlers = {}) {
@@ -390,7 +395,7 @@ export function renderTitle(container, state, handlers = {}) {
     return parts;
   }
   const all = verdict.kind !== 'error' && services?.all
-    ? allServicesView({ ...services.all, bothAnswered: verdict.sources.length === SOURCES.length })
+    ? allServicesView({ ...services.all, kind: verdict.kind, coveredCountries: reconciled.coveredCountries, notes: sourceNotes(verdict, { all: true }) })
     : null;
   parts.live.replaceChildren(all ? all.card : verdictCard(verdict, handlers, title, reconciled));
   if (verdict.kind === 'error') {

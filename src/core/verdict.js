@@ -1,12 +1,22 @@
 import { byKey } from '../data/services.js';
 import { countryName, formatDate, formatNumber } from '../i18n/strings.js';
 import { country } from './normalize.js';
-import { offerService } from './reconcile.js';
+import { reportedOffers } from './reconcile.js';
 
 const responds = ({ status }) => status !== 'unavailable';
 
 function hasTechnicalError({ status, error }) {
   return status === 'unavailable' && Boolean(error) && error.type !== 'quota';
+}
+
+/**
+ * What can be said about one country: an offer proves availability; its absence only counts when some
+ * source covers the country and the title has offers somewhere.
+ * @returns {'available'|'notFound'|'insufficient'}
+ */
+export function homeKind({ available, covered, kind }) {
+  if (available) return 'available';
+  return kind !== 'insufficient' && covered ? 'notFound' : 'insufficient';
 }
 
 function homeVerdict(code, available, reconciled, snapshots, kind) {
@@ -15,9 +25,7 @@ function homeVerdict(code, available, reconciled, snapshots, kind) {
   const saNotCovered = Boolean(saCoverage && !saCoverage.has(code));
   return {
     country: code,
-    kind: available.has(code) ? 'available'
-      : kind !== 'insufficient' && reconciled.coveredCountries.has(code) ? 'notFound'
-      : 'insufficient',
+    kind: homeKind({ available: available.has(code), covered: reconciled.coveredCountries.has(code), kind }),
     saNotCovered,
   };
 }
@@ -36,18 +44,14 @@ export function computeVerdict({ reconciled, snapshots, serviceKey, serviceMap, 
   });
   const unknownCoverage = perSourceNotes.some((note) => responds(note) && note.coverage === 'unknown');
   const available = new Set(tmdbError ? [] : reconciled.countries.map((row) => row.country));
-  const reportedOffers = responses.filter(({ status }) => status === 'offers');
+  const withOffers = responses.filter(({ status }) => status === 'offers');
   // Reconciliation omits unknown-coverage sources. Their positive offers still establish availability.
-  for (const snapshot of reportedOffers) {
-    if (reconciled.coverage[snapshot.source].status !== 'unknown') continue;
-    for (const offer of snapshot.offers) {
-      const code = country(offer.country);
-      const identity = offerService(snapshot.source, offer, serviceMap).key;
-      if (code && (aliases?.get(identity) ?? identity) === serviceKey) available.add(code);
-    }
+  const uncounted = withOffers.filter(({ source }) => reconciled.coverage[source].status === 'unknown');
+  for (const offer of reportedOffers({ snapshots: uncounted, serviceMap, aliases })) {
+    if (offer.key === serviceKey) available.add(offer.country);
   }
   const kind = available.size > 0 ? 'available'
-    : reportedOffers.length > 0 ? 'notFound'
+    : withOffers.length > 0 ? 'notFound'
     : tmdbError || (snapshots.length > 0 && snapshots.every(hasTechnicalError)) ? 'error'
     : 'insufficient';
   const fetchedAt = responses.reduce((latest, snapshot) =>

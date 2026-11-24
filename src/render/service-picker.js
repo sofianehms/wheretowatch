@@ -1,5 +1,5 @@
 // Service picker of the title page: a labelled native select, so keyboard and screen readers work as is.
-import { reconcileAll } from '../core/reconcile.js';
+import { reconcileAll, reportedOffers } from '../core/reconcile.js';
 import { DEFAULT_SERVICE, byKey } from '../data/services.js';
 import { t } from '../i18n/strings.js';
 import { el, icon, uniqueId } from './dom.js';
@@ -56,7 +56,9 @@ export function servicesState(input, choice, home) {
   const selected = effectiveService(choice ?? DEFAULT_SERVICE, options);
   return {
     options, selected, aliases,
-    all: selected === ALL_SERVICES ? { reconciledAll, home: home ? String(home).toLowerCase() : null } : null,
+    all: selected === ALL_SERVICES
+      ? { reconciledAll, offers: reportedOffers({ ...input, aliases }), home: home ? String(home).toLowerCase() : null }
+      : null,
   };
 }
 

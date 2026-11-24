@@ -69,6 +69,20 @@ function collect({ snapshots, coverage, serviceMap, aliases }) {
   return { coveredCountries, fetchedAt, sources, services, tmdbLinks };
 }
 
+/**
+ * Every offer the answering sources reported, whatever is known about their coverage: a listed offer is
+ * evidence of availability even when the source's country list could not be loaded.
+ * @returns {{source: string, country: string, key: string, offerType: string}[]}
+ */
+export function reportedOffers({ snapshots, serviceMap, aliases }) {
+  return snapshots.filter(({ status }) => status === 'offers').flatMap(({ source, offers }) => offers.flatMap((offer) => {
+    const code = country(offer.country);
+    if (!code) return [];
+    const { key } = offerService(source, offer, serviceMap);
+    return [{ source, country: code, key: aliases?.get(key) ?? key, offerType: offer.offerType }];
+  }));
+}
+
 function classify(code, offers, sources, sourceIds) {
   if (!Object.hasOwn(sourceIds, 'tmdb') || !Object.hasOwn(sourceIds, 'sa')) return 'single';
   if (offers.tmdb.length && offers.sa.length) return 'confirmed';

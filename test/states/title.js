@@ -286,10 +286,61 @@ function checkPicker(container) {
   const names = [...field.options].map((option) => option.textContent);
   if (names[0] !== 'Netflix') problems.push(`Netflix is not first (${names[0]})`);
   if (names.at(-1) !== 'All services') problems.push('"All services" is not the last entry');
+  const [labelBox, fieldBox] = [label, field].map((node) => node?.getBoundingClientRect());
+  if (labelBox && !(labelBox.right <= fieldBox.left && labelBox.top < fieldBox.bottom && labelBox.bottom > fieldBox.top)) {
+    problems.push('the "Service" label is not on the left of the select, on the same row');
+  }
   return problems;
 }
 
+// Each row of the "All services" view as "type / service / source".
+const allRows = (container) => [...container.querySelectorAll('section.group')].flatMap((group) => [...group.querySelectorAll('.country')]
+  .map((row) => `${group.querySelector('.group__title').textContent} / ${text(row, '.country__name')} / ${text(row, '.badge')}`));
+const checkRows = (container, expected) => (allRows(container).join('; ') === expected.join('; ') ? [] : [`wrong rows: ${allRows(container).join('; ')}`]);
+const TMDB_ONLY = 'JustWatch via TMDB only';
+const homeRows = (appleSource) => [
+  'Subscription / Canal+ / Confirmed', `Rent / Apple TV / ${appleSource}`, 'Rent / Prime Video / Confirmed', `Buy / Prime Video / ${TMDB_ONLY}`,
+];
+
+// The coverage endpoint of one or both sources failed: the offers they listed are still known.
+const unknownCoverage = (input, ...sources) => ({
+  ...input, coverage: { ...input.coverage, ...Object.fromEntries(sources.map((id) => [id, { status: 'unknown' }])) },
+});
+const singleSource = {
+  coverage: { tmdb: withoutNetflix.coverage.tmdb },
+  snapshots: withoutNetflix.snapshots.filter(({ source }) => source === 'tmdb'),
+};
+
 const serviceScenarios = [
+  serviceScenario('Title · all services, coverage of one source unknown', unknownCoverage(withoutNetflix, 'tmdb'), {
+    choice: 'all',
+    verify(container) {
+      const problems = checkRows(container, homeRows(TMDB_ONLY));
+      if (!/4 ways to watch in France/.test(text(container, '.verdict__headline'))) problems.push(`wrong headline: ${text(container, '.verdict__headline')}`);
+      if (!/JustWatch via TMDB is not known, so this list may be incomplete/.test(text(container, '.verdict'))) problems.push('the unknown coverage is not reported');
+      return problems;
+    },
+  }),
+  serviceScenario('Title · all services, coverage of both sources unknown', unknownCoverage(withoutNetflix, 'tmdb', 'sa'), {
+    choice: 'all',
+    verify(container) {
+      const problems = checkRows(container, homeRows(TMDB_ONLY));
+      if (container.querySelectorAll('.verdict .banner').length !== 2) problems.push('both unknown coverages are not reported');
+      return problems;
+    },
+  }),
+  serviceScenario('Title · all services, unknown coverage and no listed offer at home', unknownCoverage(withoutNetflix, 'tmdb', 'sa'), {
+    choice: 'all', home: 'jp',
+    verify: (container) => /Not enough data to conclude/.test(text(container, '.verdict__headline')) && container.querySelector('.verdict .banner')
+      ? [] : [`an absence is claimed despite unknown coverage: ${text(container, '.verdict__headline')}`],
+  }),
+  serviceScenario('Title · all services, single source', singleSource, {
+    choice: 'all',
+    verify: (container) => checkRows(container, [
+      `Subscription / Canal+ / ${TMDB_ONLY}`, `Rent / Apple TV / ${TMDB_ONLY}`, `Rent / Prime Video / ${TMDB_ONLY}`, `Buy / Prime Video / ${TMDB_ONLY}`,
+    ]),
+  }),
+
   serviceScenario('Title · picker, Netflix absent while other services are present', withoutNetflix, {
     verify(container) {
       const problems = checkPicker(container);
@@ -316,16 +367,20 @@ const serviceScenarios = [
       if (!/4 ways to watch in France/.test(text(container, '.verdict__headline'))) problems.push(`wrong headline: ${text(container, '.verdict__headline')}`);
       const groups = [...container.querySelectorAll('section.group')].map((node) => node.querySelector('.group__title').textContent);
       if (groups.join() !== 'Subscription,Rent,Buy') problems.push(`wrong groups: ${groups}`);
-      if (!container.querySelector('.badge--confirmed') || !/only/.test(text(container, 'section.group .badge:not(.badge--confirmed)'))) problems.push('the source of each offer is not shown');
+      problems.push(...checkRows(container, homeRows(TMDB_ONLY)));
       if (container.querySelector('.home')) problems.push('the single-service country line is still shown');
       choose(container, 'netflix');
       if (!/Not found on Netflix/.test(text(container, '.verdict__headline'))) problems.push('going back to a service does not restore its verdict');
       return problems;
     },
   }),
-  serviceScenario('Title · all services, no offer in the reference country', withoutNetflix, {
+  serviceScenario('Title · all services, no offer in the reference country', catalogue([['Canal+', 'fr', 'subscription', 381]], ['fr', 'jp']), {
     choice: 'all', home: 'jp',
     verify: (container) => /No offer found in Japan/.test(text(container, '.verdict__headline')) ? [] : ['the empty all-services state is missing'],
+  }),
+  serviceScenario('Title · all services, reference country covered by no source', withoutNetflix, {
+    choice: 'all', home: 'jp',
+    verify: (container) => /Not enough data to conclude/.test(text(container, '.verdict__headline')) ? [] : ['an uncovered country is reported as without offer'],
   }),
   serviceScenario('Title · all services, no reference country', withoutNetflix, {
     choice: 'all', home: null,

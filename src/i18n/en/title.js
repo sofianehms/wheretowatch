@@ -28,6 +28,7 @@ export default {
   'banner.notRecognized.text': '{source} does not know this title. This is not a sign it is unavailable; languages cannot be shown.',
   'banner.coverageUnknown.title': 'Coverage of a source unknown',
   'banner.coverageUnknown.text': 'The list of countries covered by {source} is not known, so the country count is not shown.',
+  'banner.coverageUnknown.allText': 'The list of countries covered by {source} is not known, so this list may be incomplete.',
   'banner.coverageStale.title': 'Coverage from an older list',
   'banner.coverageStale.text': 'The countries covered by {source} come from a list retrieved on {date}.',
   'langs.audio': 'Audio',
