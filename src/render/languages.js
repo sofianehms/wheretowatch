@@ -21,8 +21,9 @@ function tracksOf(row) {
     .map(({ track, name }) => ({ closedCaptions: track.closedCaptions, label: track.closedCaptions ? t('title.langs.sdh', { language: name }) : name }))]));
 }
 
-function panelBody(row) {
-  if (row.state === 'outsideSaCoverage') return [el('p', 'langs__note', t('title.langs.notCovered'))];
+function panelBody(row, saCovered) {
+  const noSaOffer = (row.offers.sa ?? []).length === 0;
+  if (row.state === 'outsideSaCoverage' || (saCovered === false && noSaOffer)) return [el('p', 'langs__note', t('title.langs.notCovered'))];
   const tracks = tracksOf(row);
   if (KINDS.every((kind) => tracks[kind].length === 0)) return [el('p', 'langs__note', t('title.langs.missing'))];
   const list = el('dl', 'langs__list');
@@ -46,9 +47,10 @@ function panelBody(row) {
 /**
  * One country row whose languages open on demand.
  * @param {{country: string, state: string, offers: {sa: object[]}}} row
- * @param {{name: HTMLElement, badge: HTMLElement|null}} parts Name and optional source badge of the row.
+ * @param {{name: HTMLElement, badge: HTMLElement|null, saCovered?: boolean|null}} parts Name and optional source badge of the row;
+ *   `saCovered` tells whether the second source's coverage list holds the country (null when that list is unknown).
  */
-export function languageRow(row, { name, badge }) {
+export function languageRow(row, { name, badge, saCovered = null }) {
   const id = uniqueId('langs');
   const item = el('li', 'country');
   const toggle = el('button', 'country__toggle', '', { type: 'button', 'aria-expanded': 'false', 'aria-controls': id });
@@ -58,7 +60,7 @@ export function languageRow(row, { name, badge }) {
   if (badge) toggle.append(badge);
   toggle.append(chevron);
   const panel = el('div', 'langs', '', { id, hidden: '' });
-  panel.append(...panelBody(row));
+  panel.append(...panelBody(row, saCovered));
   toggle.addEventListener('click', () => {
     const open = toggle.getAttribute('aria-expanded') !== 'true';
     toggle.setAttribute('aria-expanded', String(open));

@@ -168,6 +168,25 @@ const languagesInput = {
     ]),
   ],
 };
+// Eight countries, the first with twelve subtitles: the "Show more" cutoff must only count country rows.
+const manyCountries = (() => {
+  const codes = ['au', 'at', 'be', 'br', 'ca', 'de', 'fr', 'jp'];
+  return {
+    coverage: { tmdb: { status: 'fresh', countries: codes }, sa: { status: 'fresh', countries: codes } },
+    snapshots: [
+      dated('tmdb', codes.map(tmdbOffer)),
+      dated('sa', codes.map((code, index) => withLanguages(code, index === 0 ? manySubtitles.map((language) => track('subtitle', language)) : [track('audio', 'eng')]))),
+    ],
+  };
+})();
+// The second source answers with no offer and its fresh list leaves out the United States.
+const uncoveredInput = {
+  coverage: { tmdb: { status: 'fresh', countries: ['us', 'fr'] }, sa: { status: 'fresh', countries: ['fr'] } },
+  snapshots: [
+    dated('tmdb', ['us', 'fr'].map(tmdbOffer)),
+    { source: 'sa', status: 'empty', fetchedAt: '2026-11-22T12:00:00Z', coveredCountries: null, offers: [], error: null },
+  ],
+};
 const rowOf = (container, name) => [...container.querySelectorAll('.country')].find((node) => node.querySelector('.country__name')?.firstChild.textContent === name);
 
 function openLanguages(container, name) {
@@ -330,11 +349,46 @@ const scenarios = [
       return problems;
     },
   }),
+  scenario('Title · languages, show fewer keeps the language entries', result(manyCountries), {
+    verify(container) {
+      const problems = [];
+      const opened = openLanguages(container, 'Australia');
+      problems.push(...opened.problems);
+      const entries = () => container.querySelectorAll('.langs li:not([hidden])').length;
+      const rows = () => [...more.closest('.group').querySelectorAll('.countries > li')].filter((node) => !node.hidden).length;
+      const more = container.querySelector('.more');
+      const before = entries();
+      more.click();
+      if (rows() !== 8) problems.push(`expected 8 country rows once expanded, saw ${rows()}`);
+      more.click();
+      if (rows() !== 6) problems.push(`expected 6 country rows once collapsed, saw ${rows()}`);
+      if (entries() !== before) problems.push(`language entries changed from ${before} to ${entries()} after show more and show fewer`);
+      if (opened.panel.hidden) problems.push('the open language panel closed');
+      return problems;
+    },
+  }),
+  scenario('Title · languages, known uncovered country with an empty second-source answer', result(uncoveredInput), {
+    verify(container) {
+      const opened = openLanguages(container, 'United States');
+      const note = opened.panel?.textContent ?? '';
+      return [...opened.problems, ...(/Second source: country not covered/.test(note) ? [] : [`wrong note: ${note}`])];
+    },
+  }),
   scenario('Title · languages, keyboard', result(languagesInput), {
     verify(container) {
       const toggle = rowOf(container, 'France')?.querySelector('button');
       if (!toggle || toggle.localName !== 'button') return ['the country toggle is not a native button'];
-      return toggle.tabIndex >= 0 ? [] : ['the toggle is not focusable'];
+      if (toggle.tabIndex < 0) return ['the toggle is not focusable'];
+      toggle.focus();
+      // A native button turns Enter and Space into a click; the click is what opens and closes the panel.
+      const problems = [];
+      if (document.activeElement !== toggle) problems.push('the toggle does not take the focus');
+      const panel = document.getElementById(toggle.getAttribute('aria-controls'));
+      toggle.click();
+      if (toggle.getAttribute('aria-expanded') !== 'true' || panel.hidden) problems.push('activation does not open the panel');
+      toggle.click();
+      if (toggle.getAttribute('aria-expanded') !== 'false' || !panel.hidden) problems.push('a second activation does not close the panel');
+      return problems;
     },
   }),
   scenario('Title · error, keys refused', { status: 'result', title: movie, ...compute(failing(disagreement, 'auth')) }, {

@@ -211,14 +211,16 @@ function badge(row, both) {
   return make('', 'info', t('title.badge.only', { source: sourceName(only) }));
 }
 
-function countryRow(row, both) {
+function countryRow(row, both, saCountries) {
   const name = el('span', 'country__name', countryName(row.country.toUpperCase()));
   const [first, second] = SOURCES.map((id) => row.types[id].join());
   if (row.state === 'conflict' || (first && second && first !== second)) name.append(el('small', '', offerTypesLine(row)));
-  return languageRow(row, { name, badge: badge(row, both) });
+  // A known Movie of the Night list that omits the country: its languages cannot exist, whatever the row state.
+  const saCovered = saCountries ? saCountries.has(row.country) : null;
+  return languageRow(row, { name, badge: badge(row, both), saCovered });
 }
 
-function group(type, rows, both) {
+function group(type, rows, both, saCountries) {
   const id = uniqueId('group');
   const section = el('section', 'group', '', { 'aria-labelledby': id });
   const head = el('div', 'group__head');
@@ -228,7 +230,7 @@ function group(type, rows, both) {
   );
   const list = el('ul', 'countries');
   rows.forEach((row, index) => {
-    const item = countryRow(row, both);
+    const item = countryRow(row, both, saCountries);
     if (index >= INITIAL_COUNTRIES) item.hidden = true;
     list.append(item);
   });
@@ -240,7 +242,7 @@ function group(type, rows, both) {
     });
     more.addEventListener('click', () => {
       const open = more.getAttribute('aria-expanded') !== 'true';
-      list.querySelectorAll('li').forEach((item, index) => { item.hidden = !open && index >= INITIAL_COUNTRIES; });
+      [...list.children].forEach((item, index) => { item.hidden = !open && index >= INITIAL_COUNTRIES; });
       more.setAttribute('aria-expanded', String(open));
       more.textContent = open ? t('title.more.hide') : t('title.more.show', { count: formatNumber(extra) });
     });
@@ -255,7 +257,7 @@ function groups(reconciled, verdict) {
   const byName = (a, b) => countryName(a.country.toUpperCase()).localeCompare(countryName(b.country.toUpperCase()));
   for (const type of OFFER_TYPES) {
     const rows = reconciled.countries.filter((row) => typesOf(row).includes(type)).sort(byName);
-    if (rows.length > 0) box.append(group(type, rows, both));
+    if (rows.length > 0) box.append(group(type, rows, both, reconciled.coverage.sa?.countries ?? null));
   }
   return box;
 }

@@ -631,6 +631,43 @@ const scenarios = [
     },
   },
   {
+    name: 'Search · choosing a suggestion opens the title page with its language disclosure',
+    async render(container) {
+      const offer = (source, languages) => ({
+        source, country: 'fr', serviceKey: 'netflix', serviceName: 'Netflix', serviceLogoPath: null, offerType: 'subscription', link: null,
+        quality: null, expiresOn: null, languages,
+      });
+      const snapshot = (source, offers) => ({ source, status: 'offers', fetchedAt: '2026-11-22T12:00:00Z', coveredCountries: null, offers, error: null });
+      const sources = {
+        async searchTitles() {
+          return { titles: [{ mediaType: 'movie', tmdbId: 11, imdbId: null, title: 'Harbour Lights', year: 2023, posterPath: null, ref: 'movie/11' }], error: null };
+        },
+        async loadAvailability() {
+          return {
+            snapshots: [snapshot('tmdb', [offer('tmdb', [])]), snapshot('sa', [offer('sa', [{ kind: 'audio', language: 'fra', region: null, closedCaptions: false }])])],
+            coverage: { tmdb: { status: 'fresh', countries: ['fr'] }, sa: { status: 'fresh', countries: ['fr'] } },
+          };
+        },
+      };
+      mountApp(container, { stored: { 'wtw.key.tmdb': sampleKey }, sources, launchQuery: 'harbour' });
+      await settle();
+      container.querySelector('#search [role="option"]').click();
+      for (let wait = 0; wait < 50 && !container.querySelector('#title .country__toggle'); wait += 1) await new Promise((resolve) => setTimeout(resolve, 20));
+    },
+    check(container) {
+      const problems = [];
+      if (!container.querySelector('#title .verdict')) problems.push('the title page shows no verdict');
+      const toggle = container.querySelector('#title .country__toggle');
+      if (!toggle) return [...problems, 'the country row is missing'];
+      toggle.click();
+      if (!/French/.test(container.querySelector('#title .langs').textContent)) problems.push('the audio language is not shown after opening the row');
+      container.querySelector('#search input').value = 'x';
+      container.querySelector('#search input').dispatchEvent(new Event('input', { bubbles: true }));
+      if (container.querySelector('#title').childElementCount !== 0) problems.push('typing a new query keeps the old title page');
+      return problems;
+    },
+  },
+  {
     name: 'Launch · without a key the home screen waits and the search starts once the key is saved',
     async render(container) {
       const calls = [];

@@ -68,12 +68,14 @@
 .countries { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
 .country { background: var(--color-surface); border-radius: var(--radius-md); }
 .country__toggle {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-3);
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3);
   width: 100%; min-height: var(--tap-size-lg); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   border: 0; border-radius: var(--radius-md); background: transparent; text-align: left; cursor: pointer;
 }
 .country__toggle:hover { background: var(--color-surface-hover); }
-.country__toggle > .icon { color: var(--color-text-muted); }
+.country__toggle > .country__name { flex: 1 1 var(--country-basis); min-width: 0; }
+.country__toggle > .badge { flex: none; max-width: 100%; }
+.country__toggle > .icon { flex: none; margin-left: auto; color: var(--color-text-muted); }
 .country__toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
 .country__name { font-weight: var(--weight-medium); color: var(--color-text-strong); overflow-wrap: anywhere; }
 .country__name small { display: block; font-weight: var(--weight-regular); font-size: var(--text-sm); color: var(--color-text-muted); }
