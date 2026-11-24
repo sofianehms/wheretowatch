@@ -4,6 +4,9 @@ import { el, icon, uniqueId } from './dom.js';
 
 /**
  * Wire the search input to its status line.
+ * @param {HTMLInputElement} input
+ * @param {HTMLElement} status
+ * @returns {{reset: () => void}} `reset()` empties the query and shows the hint again.
  */
 export function bindSearch(input, status) {
   input.addEventListener('input', () => {
@@ -92,6 +95,15 @@ function optionContent(title, index, query, configuration) {
 /**
  * Render the search field and its suggestions into `container`. Calling it again on the same
  * container updates the existing field, so the focus and the typed text are kept.
+ * @param {HTMLElement} container
+ * @param {{status: 'idle'|'loading'|'results'|'empty'|'error', query?: string, value?: string,
+ *   titles?: import('../api/sources.js').Title[], error?: {type?: string}, online?: boolean,
+ *   imageConfiguration?: object|null}} state
+ * @param {{onInput?: (value: string) => void, onSubmit?: (value: string) => void,
+ *   onChoose?: (title: object) => void, onRetry?: (value: string) => void,
+ *   onCheckKey?: () => void, onCancel?: () => void, onCompositionStart?: () => void,
+ *   onCompositionEnd?: (value: string) => void, hrefFor?: (title: object) => string}} [handlers]
+ * @param {{fallback?: boolean}} [options]
  */
 export function render(container, state, handlers = {}, { fallback = COMBOBOX_FALLBACK } = {}) {
   const existing = controllers.get(container);
