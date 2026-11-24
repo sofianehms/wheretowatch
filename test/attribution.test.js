@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { t } from '../src/i18n/strings.js';
 
@@ -16,6 +17,9 @@ test('the attribution texts match the required wording exactly', () => {
   assert.ok(t('common.attribution.night').endsWith(t('common.attribution.nightLink')));
 });
 
-test('no JustWatch or TMDB logo is shipped as an image', () => {
-  assert.ok(!/<img|\.svg|\.png/i.test(t('common.attribution.justwatch') + t('common.attribution.tmdb')));
+test('no JustWatch or TMDB logo is shipped or rendered as an image', () => {
+  const renderer = readFileSync('src/render/attribution.js', 'utf8');
+  assert.ok(!/createElementNS|<img|'img'|'svg'|icon\(|\.(?:svg|png|jpe?g|webp)/i.test(renderer), 'The attribution renderer must only emit text.');
+  const shipped = ['assets', 'icons', 'design'].flatMap((dir) => (existsSync(dir) ? readdirSync(dir, { recursive: true }) : []));
+  assert.deepEqual(shipped.filter((file) => /tmdb|justwatch|movieofthenight/i.test(String(file)) && /\.(?:svg|png|jpe?g|webp|gif|avif)$/i.test(String(file))), []);
 });

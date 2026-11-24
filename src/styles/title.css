@@ -140,3 +140,6 @@
 }
 .badge--confirmed { color: var(--color-positive); }
 .covered { margin-top: var(--space-2); }
+
+/* A title page carries its own h1: the site-name heading of the search view steps aside. */
+#search-view:has(.title-head) > h1.visually-hidden { display: none; }

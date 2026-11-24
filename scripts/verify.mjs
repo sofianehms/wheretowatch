@@ -249,8 +249,12 @@ try {
         const name = `${route.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'index'}-${vp.name}-${scheme}.png`;
         await page.screenshot({ path: path.join(shotsDir, name), fullPage: true });
         await checkOverflow(page, vp.width, report);
-        const axe = await new AxeBuilder({ page }).analyze();
-        for (const v of axe.violations.filter((x) => ['serious', 'critical'].includes(x.impact))) {
+        // The states gallery stacks many independent screens on one page, so the same landmark names repeat
+        // by construction; every other rule, at every impact level, applies there as everywhere else.
+        const builder = new AxeBuilder({ page });
+        if (isStatesPage(route)) builder.disableRules(['landmark-unique']);
+        const axe = await builder.analyze();
+        for (const v of axe.violations) {
           report(`axe ${v.impact}: ${v.id} (${v.nodes.length} node(s))`);
         }
         await ctx.close();

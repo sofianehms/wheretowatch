@@ -32,7 +32,7 @@ const wide = (() => {
   return {
     coverage: { tmdb: { status: 'fresh', countries: codes }, sa: { status: 'fresh', countries: codes.filter((code) => code !== 'ar') } },
     snapshots: [
-      snapshot('tmdb', [...codes.filter((code) => code !== withoutOffer).map((code) => offer('tmdb', code)), offer('tmdb', 'fr', 'rent'), offer('tmdb', 'de', 'free')]),
+      snapshot('tmdb', [...codes.filter((code) => code !== withoutOffer).map((code) => offer('tmdb', code, 'subscription', 'https://www.themoviedb.org/movie/11/watch?locale=' + code.toUpperCase())), offer('tmdb', 'fr', 'rent'), offer('tmdb', 'de', 'free')]),
       snapshot('sa', [
         ...codes.slice(0, 15).map((code) => offer('sa', code, 'subscription', code === 'fr' ? 'https://www.netflix.com/title/80000001' : null)),
         offer('sa', 'jp', 'rent'),
@@ -243,7 +243,7 @@ const scenarios = [
       if (container.querySelectorAll('.countries li[hidden]').length !== hiddenBefore) problems.push('the show-fewer control does not collapse the list');
       const names = [...container.querySelectorAll('.group:first-of-type .country__name')].map((node) => node.firstChild.textContent);
       if (names.join('|') !== [...names].sort((a, b) => a.localeCompare(b)).join('|')) problems.push('the countries are not listed A to Z');
-      problems.push(...has(container, '.data-note a[href^="https://www.themoviedb.org/movie/11"]', 'the TMDB link'));
+      problems.push(...has(container, '.data-note a[href^="https://www.themoviedb.org/movie/11/watch?locale="]', 'the TMDB watch-provider link'));
       problems.push(...has(container, '.data-note a[href^="https://www.netflix.com/"]', 'the direct service link'));
       problems.push(...has(container, '.covered', 'the list of covered countries'));
       return problems;
