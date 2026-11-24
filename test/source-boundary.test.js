@@ -7,7 +7,11 @@ import { parse } from 'acorn';
 
 const repository = fileURLToPath(new URL('../', import.meta.url));
 const ignoredDirectories = new Set(['.git', '.verify', 'node_modules']);
-const clientUnitTests = new Set(['test/tmdb-search.test.js', 'test/streaming.test.js']);
+const clientUnitTests = new Set([
+  'test/tmdb-search.test.js',
+  'test/tmdb-availability.test.js',
+  'test/streaming.test.js',
+]);
 
 function* moduleFiles(directory = '') {
   for (const entry of readdirSync(join(repository, directory), { withFileTypes: true })) {

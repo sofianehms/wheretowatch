@@ -1,9 +1,40 @@
 import { createCache } from './cache.js';
 import { HttpError, request } from './http.js';
+import { country, offerType, serviceKey } from '../core/normalize.js';
 import { getLocale as appLocale } from '../i18n/strings.js';
 
 const baseUrl = 'https://api.themoviedb.org/3/';
 const source = 'tmdb';
+const providerGroups = ['flatrate', 'free', 'ads', 'rent', 'buy'];
+
+function normalizeProviders(results) {
+  const offers = [];
+  const countries = new Set();
+  for (const [code, region] of Object.entries(results)) {
+    const normalizedCountry = country(code);
+    if (!normalizedCountry) continue;
+    countries.add(normalizedCountry);
+    for (const group of providerGroups) {
+      for (const provider of region[group] ?? []) {
+        const service = serviceKey(source, provider.provider_id, provider.provider_name);
+        if (!service) continue;
+        offers.push({
+          country: normalizedCountry,
+          serviceKey: service.key,
+          serviceName: provider.provider_name,
+          serviceLogoPath: provider.logo_path ?? null,
+          offerType: offerType(source, group),
+          source,
+          link: region.link ?? null,
+          quality: null,
+          expiresOn: null,
+          languages: [],
+        });
+      }
+    }
+  }
+  return { offers, coveredCountries: countries.size };
+}
 
 function toTitle(result) {
   const movie = result.media_type === 'movie';
@@ -23,7 +54,7 @@ function toTitle(result) {
 
 /** @returns {import('./sources.js').Source & {getImageConfiguration: () => Promise<object|null>}} */
 export function createTmdbSource({
-  http = request, cache = createCache(), getToken, getLocale = appLocale,
+  http = request, cache = createCache(), getToken, getLocale = appLocale, now = Date.now,
 }) {
   // Region and configuration data lives for seven days in the persistent cache; when the browser refuses
   // to store it, it is kept for the current visit instead so that the quota is not spent again.
@@ -50,9 +81,17 @@ export function createTmdbSource({
     });
   }
 
+  async function loadTitleData(key, kind, load) {
+    const cached = cache.get(key);
+    if (cached) return cached.value;
+    const value = await load();
+    cache.set(key, value, { kind, source });
+    return value;
+  }
+
   return {
     id: source,
-    capabilities: { search: true, availability: false, languages: false, instantSearch: true },
+    capabilities: { search: true, availability: true, languages: false, instantSearch: true },
 
     async searchTitles(query, { signal } = {}) {
       if (signal?.aborted) throw new HttpError('aborted');
@@ -98,8 +137,75 @@ export function createTmdbSource({
       }
     },
 
-    async getAvailability() {
-      throw new Error('not implemented');
+    async getAvailability(title, { signal } = {}) {
+      const { mediaType, tmdbId } = title;
+      const snapshot = {
+        source,
+        title,
+        status: 'notFound',
+        fetchedAt: new Date(now()).toISOString(),
+        coveredCountries: null,
+        offers: [],
+        error: null,
+      };
+      if (signal?.aborted) {
+        return { ...snapshot, status: 'unavailable', error: new HttpError('aborted') };
+      }
+      if (!['movie', 'tv'].includes(mediaType) || !Number.isSafeInteger(tmdbId) || tmdbId <= 0) {
+        return snapshot;
+      }
+
+      const ref = `${mediaType}/${tmdbId}`;
+      const missingKey = `tmdb.notFound.${ref}`;
+      const missing = cache.get(missingKey);
+      if (missing) {
+        const { fetchedAt, details } = missing.value;
+        return {
+          ...snapshot,
+          fetchedAt,
+          title: details ? { ...title, ref, imdbId: details.imdbId } : title,
+        };
+      }
+
+      const [details, providers] = await Promise.allSettled([
+        loadTitleData(`tmdb.details.${ref}`, 'metadata', async () => {
+          const data = await get(ref, { append_to_response: 'external_ids' }, signal);
+          return { imdbId: data.external_ids?.imdb_id ?? null };
+        }),
+        loadTitleData(`tmdb.providers.${ref}`, 'availability', async () => {
+          const { results } = await get(`${ref}/watch/providers`, undefined, signal);
+          if (!results || typeof results !== 'object' || Array.isArray(results)) {
+            throw new HttpError('server');
+          }
+          return { ...normalizeProviders(results), fetchedAt: new Date(now()).toISOString() };
+        }),
+      ]);
+      if (details.status === 'fulfilled') {
+        snapshot.title = { ...title, ref, imdbId: details.value.imdbId };
+      }
+      if (signal?.aborted) {
+        return { ...snapshot, status: 'unavailable', error: new HttpError('aborted') };
+      }
+      const failures = [details, providers].filter(({ status }) => status === 'rejected');
+      // Technical failures take precedence so a mixed failure can be retried immediately.
+      const technicalFailure = failures.find(({ reason }) => reason?.type !== 'notFound');
+      if (technicalFailure) {
+        const { reason } = technicalFailure;
+        const error = reason instanceof HttpError ? reason : new HttpError('server');
+        return { ...snapshot, status: 'unavailable', error };
+      }
+      if (failures.length) {
+        cache.set(missingKey, {
+          fetchedAt: snapshot.fetchedAt,
+          details: details.status === 'fulfilled' ? details.value : null,
+        }, { kind: 'availability', source });
+        return snapshot;
+      }
+      return {
+        ...snapshot,
+        ...providers.value,
+        status: providers.value.offers.length ? 'offers' : 'empty',
+      };
     },
   };
 }
