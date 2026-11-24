@@ -1,6 +1,6 @@
 import { country, offerType, serviceKey } from '../core/normalize.js';
 import { createCache } from './cache.js';
-import { HttpError, request } from './http.js';
+import { canUseStale, HttpError, request } from './http.js';
 import { coverageKeys } from './sources.js';
 
 const baseUrl = 'https://api.movieofthenight.com/v4/';
@@ -75,7 +75,7 @@ export function createStreamingSource({ http = request, cache = createCache(), q
         onResponse: (headers) => quota.sync?.(headers),
       });
     } catch (error) {
-      if (error.status !== 429 && error.type !== 'quota' && error.type !== 'rateLimited') throw error;
+      if (error.type !== 'quota' && error.type !== 'rateLimited') throw error;
       quota.markExhausted();
       throw new HttpError('quota', undefined, error.status);
     }
@@ -91,7 +91,10 @@ export function createStreamingSource({ http = request, cache = createCache(), q
       if (signal?.aborted) return snapshot('unavailable', { error: new HttpError('aborted') });
 
       const key = `sa.shows.${ref}`;
-      const value = await cachedRequest(key, async () => {
+      const failureKey = `${key}.failure`;
+      async function load() {
+        const failure = cache.get(failureKey);
+        if (failure) return failure.value;
         let dispatched = false;
         let result;
         try {
@@ -104,12 +107,25 @@ export function createStreamingSource({ http = request, cache = createCache(), q
             ? snapshot('notFound')
             : snapshot('unavailable', { error: { type, status: error.status } });
         }
-        // Remember dispatched outcomes for a day, even if the request failed.
+        // Keep the call cooldown without replacing the last usable data on a failed refresh.
         if (dispatched) {
-          cache.set(key, result, { kind: 'availability', source });
+          cache.set(result.error ? failureKey : key, result, { kind: 'availability', source });
         }
         return result;
-      });
+      }
+      const value = quota.canCall()
+        ? await cachedRequest(key, load)
+        : snapshot('unavailable', { error: { type: 'quota' } });
+      if (value.error?.type === 'quota' || canUseStale(value.error)) {
+        const last = cache.getStale(key);
+        if (last && last.value.status !== 'unavailable') {
+          return {
+            ...last.value,
+            stale: true,
+            reason: value.error.type === 'quota' ? 'quota' : 'error',
+          };
+        }
+      }
       return value.error
         ? { ...value, error: new HttpError(value.error.type, undefined, value.error.status) }
         : value;

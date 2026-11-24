@@ -36,6 +36,10 @@ export function isQuotaExhausted(status, _headers, body) {
       .test(message.trim());
 }
 
+export function canUseStale(error) {
+  return ['network', 'server', 'timeout'].includes(error?.type);
+}
+
 function retryDelay(headers) {
   const value = headers.get('Retry-After')?.trim();
   if (!value) return 0;
