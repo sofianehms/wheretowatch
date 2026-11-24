@@ -34,7 +34,7 @@ function memoryStorage() {
  * @param {object} [options]
  * @param {Storage} [options.storage]
  * @param {Navigator} [options.navigatorLike]
- * @param {import('./api/sources.js').Source[]} [options.adapters] Source adapters; defaults to the TMDB source, which reads its key on every request.
+ * @param {import('./api/sources.js').Source[]} [options.adapters] Source adapters; defaults to the built-in providers.
  * @param {() => number} [options.now]
  */
 export function compose({
@@ -50,8 +50,22 @@ export function compose({
   const cache = createCache({ storage, now });
   const quota = createQuota({ storage, now });
   const settings = createSettings({ storage, navigatorLike, cache, quota });
-  const tmdb = createTmdbSource({ cache, getToken: () => settings.getKey('tmdb') });
-  const sources = createSources({ sources: adapters ?? [tmdb] });
+  const tmdb = createTmdbSource({ cache, getToken: () => settings.getKey('tmdb'), now });
+  let streaming;
+  const loadStreaming = () => streaming ??= import('./api/streaming.js').then(({ createStreamingSource }) =>
+    createStreamingSource({ cache, quota, getKey: () => settings.getKey('sa') }));
+  const sa = {
+    id: 'sa',
+    capabilities: { search: false, availability: true, languages: true, instantSearch: false },
+    getAvailability: async (...args) => (await loadStreaming()).getAvailability(...args),
+    listCoveredCountries: async (...args) => (await loadStreaming()).listCoveredCountries(...args),
+  };
+  const sources = createSources({
+    sources: adapters ?? [tmdb, sa],
+    isEnabled: ({ id }) => Boolean(adapters) || id !== 'sa' || Boolean(settings.getKey('sa')),
+    cache,
+    now,
+  });
 
   /** Test a key without saving it. Resolves to a key check result. */
   function checkKey(provider, value, deps = {}) {
