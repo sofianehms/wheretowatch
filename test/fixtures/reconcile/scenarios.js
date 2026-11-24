@@ -18,11 +18,11 @@ const coverage = {
   sa: { status: 'stale', countries: ['fr', 'CA', 'de'], fetchedAt: '2026-11-18T12:00:00Z' },
 };
 
-const tmdb = snapshot('tmdb', [offer('tmdb', 'fr'), offer('tmdb', 'ca', 'prime-video')]);
+const tmdb = snapshot('tmdb', [offer('tmdb', 'fr'), offer('tmdb', 'ca', 'tmdb:9902')]);
 
 export const disagreement = {
   coverage,
-  snapshots: [tmdb, snapshot('sa', [offer('sa', 'fr', 'prime-video'), offer('sa', 'de')])],
+  snapshots: [tmdb, snapshot('sa', [offer('sa', 'fr', 'sa:lantern'), offer('sa', 'de')])],
 };
 
 export const divergingTypes = {
@@ -32,7 +32,7 @@ export const divergingTypes = {
 
 export const outsideSaCoverage = {
   coverage: { ...coverage, sa: { status: 'fresh', countries: ['de'] } },
-  snapshots: [tmdb, snapshot('sa', [], 'empty')],
+  snapshots: [tmdb, snapshot('sa', [offer('sa', 'de')])],
 };
 
 export const saAbsent = {
