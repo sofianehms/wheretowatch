@@ -132,7 +132,8 @@ function verdictCard(verdict, handlers, title) {
     const types = verdict.perSourceNotes.map(({ errorType }) => errorType);
     const needsKeys = types.includes('auth');
     card.append(mark, el('h2', 'verdict__headline', t('title.error.headline'), { id }), el('p', 'verdict__detail', verdictText(verdict, t)));
-    if (verdict.fetchedAt === null) card.append(el('p', 'muted', t('verdict.noRetrieval')));
+    // Full-width row: a stray grid child would land in the icon column and squeeze the headline.
+    if (verdict.fetchedAt === null) card.append(el('p', 'muted verdict__body', t('verdict.noRetrieval')));
     const retry = el('button', `btn btn--${needsKeys ? 'secondary' : 'primary'}`, '', { type: 'button' });
     retry.append(icon('refresh', 'sm'), t('title.error.retry'));
     retry.addEventListener('click', () => handlers.onRetry?.());
