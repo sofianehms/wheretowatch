@@ -80,6 +80,7 @@ export function compose({
     sources,
     durable,
     checkKey,
+    getTitle: tmdb.getTitle,
     // Poster base URL and sizes; resolves to null when unavailable, and posters then fall back to initials.
     imageConfiguration: () => tmdb.getImageConfiguration(),
     quotaLimit: () => quota.status().limit,

@@ -48,12 +48,12 @@ function header(title, { isSeries, configuration }) {
   return head;
 }
 
-function loadingCard() {
+function loadingCard(message) {
   const id = uniqueId('verdict-load');
   const card = el('section', 'verdict', '', { 'aria-busy': 'true', 'aria-labelledby': id });
   card.append(
     el('span', 'verdict__icon verdict__skeleton-icon skeleton'),
-    el('h2', 'verdict__headline', t('title.loading'), { id }),
+    el('h2', 'verdict__headline', message, { id }),
     el('span', 'skeleton skeleton--line skeleton--mid'),
   );
   const groups = el('div', 'groups', '', { 'aria-hidden': 'true' });
@@ -327,7 +327,7 @@ const controllers = new WeakMap();
  * Render the title page into `container`. The announcement region persists between renders, so
  * a new verdict is read out once it replaces the loading text.
  * @param {HTMLElement} container
- * @param {{status: 'loading'|'result', title: import('../api/sources.js').Title,
+ * @param {{status: 'details'|'loading'|'missing'|'result', title: import('../api/sources.js').Title,
  *   verdict?: ReturnType<typeof import('../core/verdict.js').computeVerdict>,
  *   reconciled?: ReturnType<typeof import('../core/reconcile.js').reconcile>,
  *   imageConfiguration?: object|null}} state
@@ -350,10 +350,15 @@ export function renderTitle(container, state, handlers = {}) {
   }
   const { title, status, verdict, reconciled, imageConfiguration = null } = state;
   parts.aside.replaceChildren(header(title, { isSeries: status === 'result' && verdict.isSeries, configuration: imageConfiguration }));
-  if (status === 'loading') {
-    const [card, skeleton] = loadingCard();
+  if (status === 'details' || status === 'loading') {
+    const [card, skeleton] = loadingCard(t(status === 'details' ? 'title.direct.loading' : 'title.loading'));
     parts.live.replaceChildren(card);
     parts.rest.replaceChildren(skeleton);
+    return parts;
+  }
+  if (status === 'missing') {
+    parts.live.replaceChildren(el('p', 'verdict', t('title.direct.missing')));
+    parts.rest.replaceChildren();
     return parts;
   }
   parts.live.replaceChildren(verdictCard(verdict, handlers, title));

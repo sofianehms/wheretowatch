@@ -5,12 +5,16 @@ import { cleanUrl, readLaunchParams } from './core/url.js';
 import { applyStaticStrings } from './i18n/strings.js';
 
 applyStaticStrings(document);
-const { q } = readLaunchParams(location.search);
-startApp(compose(), document, { launchQuery: q });
+const { q, t } = readLaunchParams(location.search);
 
 // The launch parameters are consumed: leave a clean address behind.
-const clean = cleanUrl(location);
-if (clean !== location.pathname + location.search + location.hash) history.replaceState(history.state, '', clean);
+function cleanLaunchUrl() {
+  const clean = cleanUrl(location);
+  if (clean !== location.pathname + location.search + location.hash) history.replaceState(history.state, '', clean);
+}
+
+startApp(compose(), document, { launchQuery: q, launchTitle: t, onTitleLaunchComplete: cleanLaunchUrl });
+if (t === null) cleanLaunchUrl();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});

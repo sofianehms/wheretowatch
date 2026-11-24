@@ -11,10 +11,10 @@ import { applyTheme } from './theme.js';
  * Show the right screen for the stored keys and the navigation state.
  * @param {ReturnType<typeof import('./compose.js').compose>} app The composed services.
  * @param {ParentNode} root Where the screen slots (`#header`, `#welcome`, `#settings`, `#search-view`, `#search`) live.
- * @param {{launchQuery?: string | null}} [options] `launchQuery` is the `?q=` value: it fills the field and
- *   starts the search at once, or waits for the TMDB key when none is saved yet.
+ * @param {{launchQuery?: string | null, launchTitle?: string | null, onTitleLaunchComplete?: () => void}} [options]
+ *   A title link or query runs when the search screen first becomes available.
  */
-export function startApp(app, root = document, { launchQuery = null } = {}) {
+export function startApp(app, root = document, { launchQuery = null, launchTitle = null, onTitleLaunchComplete } = {}) {
   const { store, settings } = app;
 
   const headerSlot = root.querySelector('#header');
@@ -30,6 +30,7 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
   let imageConfiguration = null;
   let imageRequested = false;
   let pendingLaunch = launchQuery;
+  let pendingRef = launchTitle;
 
   const online = () => globalThis.navigator?.onLine !== false;
   const noSearch = async () => ({ titles: [] });
@@ -50,11 +51,12 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
   };
   function showTitle(title) {
     pendingTitle = title;
-    import('./title-page.js').then(({ createTitlePage }) => {
+    return import('./title-page.js').then(({ createTitlePage }) => {
       titlePage ??= createTitlePage({
         app, slot: titleSlot, root, imageConfiguration: () => imageConfiguration, onCheckKeys: () => openSettings(),
       });
-      if (pendingTitle === title) titlePage.show(title);
+      if (pendingTitle !== title) return;
+      return typeof title === 'string' ? titlePage.showReference(title) : titlePage.show(title);
     }, () => {});
   }
 
@@ -100,6 +102,13 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
   }
 
   function runLaunch() {
+    if (pendingRef !== null) {
+      const ref = pendingRef;
+      pendingRef = null;
+      pendingLaunch = null;
+      showTitle(ref).finally(onTitleLaunchComplete);
+      return;
+    }
     const query = pendingLaunch;
     pendingLaunch = null;
     if (query === null) return;
@@ -190,6 +199,8 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
         onCleared: () => {
           // Erasure also forgets the query typed before, so the next key starts from a blank search.
           pendingLaunch = null;
+          if (pendingRef !== null) onTitleLaunchComplete?.();
+          pendingRef = null;
           search.reset();
           applyTheme('dark', root.ownerDocument ?? root);
           closeSettings();
