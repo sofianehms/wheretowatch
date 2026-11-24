@@ -1,5 +1,5 @@
 // Minimal offline shell cache. A new worker waits and activates on the next launch. Bump CACHE when shipped files change.
-const CACHE = 'shell-v18';
+const CACHE = 'shell-v19';
 const SHELL = [
   './', 'index.html', 'design/tokens.css', 'src/styles.css',
   'src/styles/search.css', 'src/styles/settings.css', 'src/styles/banners.css', 'src/styles/about.css', 'src/styles/install.css', 'src/styles/footer.css',
@@ -13,9 +13,15 @@ const SHELL = [
   'src/i18n/en/verdict.js', 'src/i18n/en/settings.js', 'src/i18n/en/banners.js', 'src/i18n/en/about.js',
   'src/i18n/en/install.js',
 ];
+// Loaded on demand (title page, country selector). Cached with the shell so a fresh offline launch finds them,
+// but kept out of the first-load budget, which only counts what the first paint needs.
+const LAZY = [
+  'src/title-page.js', 'src/render/title.js', 'src/render/languages.js', 'src/render/country.js', 'src/i18n/en/country.js',
+  'src/styles/title.css', 'src/core/reconcile.js', 'src/core/verdict.js', 'src/api/availability.js', 'src/api/streaming.js',
+];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll([...SHELL, ...LAZY])));
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(

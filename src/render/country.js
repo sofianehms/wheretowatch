@@ -3,23 +3,26 @@ import country from '../i18n/en/country.js';
 import { countryName } from '../i18n/strings.js';
 import { el, icon, uniqueId } from './dom.js';
 
+// Own strings: the dictionary ships with this module, outside the offline shell.
+const t = (key) => country[key.replace('country.', '')];
+
 /**
  * @param {object} options
  * @param {ReturnType<typeof import('../settings/keys.js').createSettings>} options.settings
  * @param {{activeSources: {listCoveredCountries: (options?: object) => string[]|Promise<string[]>}[]}} options.sources Active sources; the list is the union of the countries they cover.
  * @param {(country: string) => void} options.onCountryChange
- * @returns {HTMLElement}
+ * @returns {HTMLElement} The section, with `refresh()` to re-read the active sources (a key was saved or removed).
  */
-// Own strings: the dictionary ships with this module, outside the offline shell.
-const t = (key) => country[key.replace('country.', '')];
-
 export function renderCountry({ settings, sources, onCountryChange }) {
   const doc = document;
-  const link = doc.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = new URL('../styles/title.css', import.meta.url).href;
-  // The select styles live with the title page styles, which load only when needed.
-  doc.head?.append(link);
+  // The select styles live with the title page styles, which load only when needed (once per page).
+  const href = new URL('../styles/title.css', import.meta.url).href;
+  if (![...(doc.head?.querySelectorAll('link[rel="stylesheet"]') ?? [])].some((l) => l.href === href)) {
+    const link = doc.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    doc.head?.append(link);
+  }
   const countryId = uniqueId('settings-country');
   const selectId = `${countryId}-select`;
   const countryHelpId = `${countryId}-help`;
@@ -53,9 +56,19 @@ export function renderCountry({ settings, sources, onCountryChange }) {
     select.disabled = false;
     if (failed) showCountryNote('country.unavailable');
   }
-  listCountries().then((codes) => codes, () => null).then((codes) => {
-    if (section.isConnected) fillCountries(codes ?? [], codes === null || codes.length === 0);
-  });
+  // Only the latest request may fill the list, so a slow earlier answer never overwrites a fresher one.
+  let request = 0;
+  function refresh() {
+    const mine = ++request;
+    listCountries().then((codes) => codes, () => null).then((codes) => {
+      if (mine !== request || !section.isConnected) return;
+      countryNote.hidden = true;
+      const keep = select.value;
+      fillCountries(codes ?? [], codes === null || codes.length === 0);
+      if (keep && [...select.options].some((o) => o.value === keep)) select.value = keep;
+    });
+  }
+  refresh();
   select.addEventListener('change', () => {
     countryNote.hidden = true;
     try {
@@ -73,5 +86,6 @@ export function renderCountry({ settings, sources, onCountryChange }) {
     countryNote,
   );
 
+  section.refresh = refresh;
   return section;
 }

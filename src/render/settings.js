@@ -244,25 +244,27 @@ export function renderClearDialog({ onCancel, onConfirm }) {
 }
 
 /**
- * Settings screen: API keys, reference country (`sources`, `onCountryChange`), theme, data.
+ * Settings screen: keys, country (`sources`, `onCountryChange`), theme, data.
  * @param {object} options
  * @param {ReturnType<typeof import('../settings/keys.js').createSettings>} options.settings
  * @param {(provider: 'tmdb'|'sa', value: string, deps: {signal: AbortSignal}) => Promise<string>} options.checkKey
  * @param {() => number} [options.quotaLimit] Monthly call limit of the optional source.
- * @param {boolean} [options.durable] False when keys last only for this visit; Settings then says so.
- * @param {(provider: 'tmdb'|'sa', outcome: string) => void} [options.onChange] Called after a key is saved,
- *   removed or verified; `outcome` is `saved`, `unverified` or `removed`.
+ * @param {boolean} [options.durable] False when keys last only for this visit.
+ * @param {(provider: 'tmdb'|'sa', outcome: string) => void} [options.onChange] After a key is saved, removed or verified.
  * @param {() => void} [options.onCleared] Called after all data has been cleared.
- * @returns {HTMLElement} The screen, with `pending()`, `confirming()` and `dispose()`.
+ * @returns {HTMLElement} The screen, with `pending()`, `confirming()`, `dispose()`.
  */
 export function renderSettings({ settings, checkKey, quotaLimit, sources, onCountryChange, durable = true, onChange = () => {}, onCleared = () => {} }) {
   const root = el('div', 'settings');
+  let countrySection;
+  // A key change alters the active sources, hence the countries.
+  const notifyChange = (...args) => (countrySection?.refresh(), onChange(...args));
 
   const keysId = uniqueId('settings-keys');
   const dataId = uniqueId('settings-data');
   const keys = el('section', '', '', { 'aria-labelledby': keysId });
   const heading = el('h2', '', t('settings.keys.title'), { id: keysId });
-  // Only one Save is primary at a time: the first field with a pending change.
+  // Only the first field with a pending change has the primary Save.
   let tmdb;
   let sa;
   const markPrimary = () => {
@@ -271,8 +273,8 @@ export function renderSettings({ settings, checkKey, quotaLimit, sources, onCoun
       if (field) field.save.className = field === first ? 'btn btn--primary' : 'btn btn--secondary';
     }
   };
-  tmdb = keyField({ provider: 'tmdb', settings, checkKey, quotaLimit, durable, onChange, onUpdate: markPrimary });
-  sa = keyField({ provider: 'sa', settings, checkKey, quotaLimit, durable, onChange, onUpdate: markPrimary });
+  tmdb = keyField({ provider: 'tmdb', settings, checkKey, quotaLimit, durable, onChange: notifyChange, onUpdate: markPrimary });
+  sa = keyField({ provider: 'sa', settings, checkKey, quotaLimit, durable, onChange: notifyChange, onUpdate: markPrimary });
   markPrimary();
   keys.append(
     heading,
@@ -302,7 +304,7 @@ export function renderSettings({ settings, checkKey, quotaLimit, sources, onCoun
   const themeName = uniqueId('theme');
   const themeNote = el('p', 'key-state key-state--bad', '', { role: 'status' });
   themeNote.hidden = true;
-  // A choice that applied but could not be saved stays selected, with its warning, when Settings reopens.
+  // An unsaved choice stays selected, with its warning, when Settings reopens.
   const shown = unsavedTheme ?? settings.getPref('theme');
   const showSaveError = () => {
     themeNote.replaceChildren(icon('alert', 'sm'), t('settings.theme.error'));
@@ -334,7 +336,7 @@ export function renderSettings({ settings, checkKey, quotaLimit, sources, onCoun
     themeNote,
   );
 
-  import('./country.js').then((m) => theme.before(m.renderCountry({ settings, sources, onCountryChange })), () => {});
+  import('./country.js').then((m) => theme.before(countrySection = m.renderCountry({ settings, sources, onCountryChange })), () => {});
 
   let scrim = null;
   function closeDialog({ restoreFocus = true } = {}) {

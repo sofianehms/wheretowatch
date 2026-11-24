@@ -231,8 +231,35 @@ const countryScenario = {
   },
 };
 
+// A key saved from Settings enables another source: the open selector must offer its countries without reopening.
+const countryRefreshScenario = {
+  name: 'Settings · country list follows the active sources',
+  async render(container) {
+    const active = [{ listCoveredCountries: async () => ['fr'] }];
+    container.mounted = mount(container, { sources: { activeSources: active }, onCountryChange: () => {} });
+    container.active = active;
+    await settle();
+    await settle();
+  },
+  async check(container) {
+    const select = container.querySelector('.settings select');
+    if (!select) return ['the country selector is missing'];
+    const problems = [];
+    const before = [...select.options].map((option) => option.value).join();
+    if (!before.includes('fr') || before.includes('jp')) problems.push(`unexpected initial options: ${before}`);
+    container.active.push({ listCoveredCountries: async () => ['jp'] });
+    select.closest('section').refresh();
+    await settle();
+    await settle();
+    const after = [...select.options].map((option) => option.value);
+    if (!after.includes('jp') || !after.includes('fr')) problems.push(`the list did not refresh: ${after}`);
+    return problems;
+  },
+};
+
 const scenarios = [
   countryScenario,
+  countryRefreshScenario,
   failedSaveScenario,
   themeScenario('Settings · dark theme chosen', 'Dark', 'dark', { stored: 'light' }),
   themeScenario('Settings · light theme chosen', 'Light', 'light'),
