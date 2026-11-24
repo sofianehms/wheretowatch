@@ -131,7 +131,7 @@ p .link, li .link--inline { display: inline; min-height: 0; } /* links inside a 
 .skeleton-stack { display: grid; gap: var(--space-1); }
 .skeleton-stack > .skeleton--short { margin-bottom: var(--space-2); }
 @keyframes pulse { to { opacity: var(--pulse-opacity); } }
-@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .skeleton, .langs { animation: none; } }
 
 /* ---------- Dialog ---------- */
 .scrim { position: fixed; inset: 0; z-index: var(--z-dialog); display: flex; flex-direction: column; align-items: center; overflow-y: auto; overscroll-behavior: contain; background: var(--color-scrim);

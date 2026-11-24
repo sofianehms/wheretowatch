@@ -94,6 +94,10 @@
   font-size: var(--text-sm); animation: fade var(--duration-fast) var(--ease-out) both;
 }
 @keyframes fade { from { opacity: 0; } }
+.langs[hidden] { display: none; }
+.langs__note { color: var(--color-text-muted); overflow-wrap: anywhere; }
+.langs__none { color: var(--color-text-muted); }
+.langs li { min-width: 0; overflow-wrap: anywhere; }
 .langs__list { display: grid; gap: var(--space-3); }
 .langs dt { font-weight: var(--weight-bold); color: var(--color-text-strong); }
 .langs dd { color: var(--color-text-muted); }

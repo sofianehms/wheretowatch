@@ -3,6 +3,7 @@ import { posterSrcset } from '../core/images.js';
 import { verdictText } from '../core/verdict.js';
 import { countryName, formatDate, formatNumber, t } from '../i18n/strings.js';
 import { el, externalLink, icon, uniqueId } from './dom.js';
+import { languageRow } from './languages.js';
 
 const TONES = 6;
 // Countries listed before the "Show more" control, per offer type.
@@ -211,14 +212,10 @@ function badge(row, both) {
 }
 
 function countryRow(row, both) {
-  const item = el('li', 'country country--static');
   const name = el('span', 'country__name', countryName(row.country.toUpperCase()));
   const [first, second] = SOURCES.map((id) => row.types[id].join());
   if (row.state === 'conflict' || (first && second && first !== second)) name.append(el('small', '', offerTypesLine(row)));
-  item.append(name);
-  const mark = badge(row, both);
-  if (mark) item.append(mark);
-  return item;
+  return languageRow(row, { name, badge: badge(row, both) });
 }
 
 function group(type, rows, both) {
