@@ -54,7 +54,7 @@ function toTitle(result) {
   };
 }
 
-/** @returns {import('./sources.js').Source & {getImageConfiguration: () => Promise<object|null>}} */
+/** @returns {import('./sources.js').Source & {getTitle: (ref: string, options?: import('./sources.js').RequestOptions) => Promise<import('./sources.js').Title>, getImageConfiguration: () => Promise<object|null>}} */
 export function createTmdbSource({
   http = request, cache = createCache(), getToken, getLocale = appLocale, now = Date.now,
 }) {
@@ -83,23 +83,44 @@ export function createTmdbSource({
     });
   }
 
-  async function loadTitleData(key, kind, load) {
+  async function loadTitleData(key, kind, load, usable = () => true) {
     const cached = cache.get(key);
-    if (cached) return { value: cached.value, stale: false };
+    if (cached && usable(cached.value)) return { value: cached.value, stale: false };
     try {
       const value = await load();
       cache.set(key, value, { kind, source });
       return { value, stale: false };
     } catch (error) {
       const last = canUseStale(error) && cache.getStale(key);
-      if (!last) throw error;
+      if (!last || !usable(last.value)) throw error;
       return { value: last.value, stale: true, fetchedAt: new Date(last.fetchedAt).toISOString() };
     }
+  }
+
+  function loadDetails(ref, signal, usable) {
+    return loadTitleData(`tmdb.details.${ref}`, 'metadata', async () => {
+      const data = await get(ref, { append_to_response: 'external_ids' }, signal);
+      const imdbId = data.external_ids?.imdb_id ?? null;
+      const title = toTitle({ ...data, media_type: ref.split('/')[0] });
+      return { imdbId, title: { ...title, imdbId } };
+    }, usable);
   }
 
   return {
     id: source,
     capabilities: { search: true, availability: true, languages: false, instantSearch: true },
+
+    async getTitle(ref, { signal } = {}) {
+      const [mediaType, id] = ref.split('/');
+      const tmdbId = Number(id);
+      if (!['movie', 'tv'].includes(mediaType) || !Number.isSafeInteger(tmdbId) || tmdbId <= 0) {
+        throw new HttpError('notFound');
+      }
+      const { value: { title } } = await loadDetails(`${mediaType}/${tmdbId}`, signal,
+        (details) => typeof details.title?.title === 'string' && details.title.tmdbId === tmdbId);
+      if (title?.tmdbId !== tmdbId || !title.title) throw new HttpError('server');
+      return title;
+    },
 
     async searchTitles(query, { signal } = {}) {
       if (signal?.aborted) throw new HttpError('aborted');
@@ -180,10 +201,7 @@ export function createTmdbSource({
       }
 
       const [details, providers] = await Promise.allSettled([
-        loadTitleData(`tmdb.details.${ref}`, 'metadata', async () => {
-          const data = await get(ref, { append_to_response: 'external_ids' }, signal);
-          return { imdbId: data.external_ids?.imdb_id ?? null };
-        }),
+        loadDetails(ref, signal),
         loadTitleData(`tmdb.providers.${ref}`, 'availability', async () => {
           const { results } = await get(`${ref}/watch/providers`, undefined, signal);
           if (!results || typeof results !== 'object' || Array.isArray(results)) {

@@ -3,6 +3,7 @@ import { HttpError } from './api/http.js';
 import { reconcile } from './core/reconcile.js';
 import { computeVerdict } from './core/verdict.js';
 import { DEFAULT_SERVICE } from './data/services.js';
+import { t } from './i18n/strings.js';
 import { renderTitle } from './render/title.js';
 
 /**
@@ -21,13 +22,13 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
   let shown = null;
 
   function present() {
-    const { title, snapshots, coverage } = shown;
+    const { title, snapshots, coverage, retry } = shown;
     const serviceKey = app.settings.getPref('service') ?? DEFAULT_SERVICE;
     const reconciled = reconcile({ snapshots, coverage, serviceKey });
     const homeCountry = app.settings.getPref('country');
     const verdict = computeVerdict({ reconciled, snapshots, serviceKey, homeCountry, mediaType: title.mediaType });
     renderTitle(slot, { status: 'result', title, verdict, reconciled, imageConfiguration: imageConfiguration() }, {
-      onRetry: () => show(title), onCheckKeys,
+      onRetry: retry, onCheckKeys,
     });
   }
 
@@ -38,16 +39,30 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
     slot.replaceChildren();
   }
 
-  async function show(title) {
+  async function show(title, ref = null) {
     run?.abort();
     shown = null;
     const current = new AbortController();
     run = current;
-    renderTitle(slot, { status: 'loading', title, imageConfiguration: imageConfiguration() }, {});
+    const renderLoading = (status) => renderTitle(slot, { status, title, imageConfiguration: imageConfiguration() });
+    const retry = () => ref === null ? show(title) : showReference(ref);
+    let resolving = ref !== null;
     let loaded;
     try {
+      if (ref !== null) {
+        renderLoading('details');
+        title = await app.getTitle(ref, { signal: current.signal });
+        if (current.signal.aborted) return;
+        resolving = false;
+      }
+      renderLoading('loading');
       loaded = await app.sources.loadAvailability(title, { signal: current.signal });
     } catch (error) {
+      if (current.signal.aborted) return;
+      if (resolving && error?.type === 'notFound') {
+        renderLoading('missing');
+        return;
+      }
       // A failed load shows the same error verdict as unreachable sources.
       const failure = error instanceof HttpError ? error : new HttpError('network');
       const fetchedAt = new Date().toISOString();
@@ -57,8 +72,13 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
       };
     }
     if (current.signal.aborted) return;
-    shown = { title, snapshots: loaded.snapshots, coverage: loaded.coverage };
+    shown = { title, snapshots: loaded.snapshots, coverage: loaded.coverage, retry };
     present();
+  }
+
+  function showReference(ref) {
+    const [mediaType] = ref.split('/');
+    return show({ mediaType, title: t('title.direct.heading') }, ref);
   }
 
   /** Recompute the verdict after a preference changed (reference country). */
@@ -66,5 +86,5 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
     if (shown) present();
   }
 
-  return { show, clear, refresh };
+  return { show, showReference, clear, refresh };
 }

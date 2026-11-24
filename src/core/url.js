@@ -1,16 +1,19 @@
-// Launch parameters of the page URL (the iPhone shortcut opens `?q=<title>`).
+// Launch parameters for search shortcuts and direct title links.
 const MAX_QUERY_LENGTH = 200;
-const LAUNCH_PARAMS = ['q'];
+const LAUNCH_PARAMS = ['q', 't'];
 
 /**
  * Read the launch parameters from a query string.
  * @param {string} search The `location.search` value.
- * @returns {{q: string | null}} The query capped at 200 characters and trimmed, or null when absent or blank.
+ * @returns {{q: string | null, t: string | null}} A valid title reference takes priority over the trimmed, capped query.
  */
 export function readLaunchParams(search) {
-  const raw = new URLSearchParams(search).get('q');
+  const params = new URLSearchParams(search);
+  const ref = params.get('t');
+  if (ref !== null && /^(movie|tv)\/\d+$/.test(ref)) return { q: null, t: ref };
+  const raw = params.get('q');
   const q = raw === null ? '' : [...raw].slice(0, MAX_QUERY_LENGTH).join('').trim();
-  return { q: q || null };
+  return { q: q || null, t: null };
 }
 
 /**

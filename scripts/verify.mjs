@@ -8,6 +8,7 @@ import AxeBuilder from '@axe-core/playwright';
 import lighthouse from 'lighthouse';
 import * as chromeLauncher from 'chrome-launcher';
 import { startServer } from './serve.mjs';
+import movieDetails from '../test/fixtures/tmdb/movie-details.js';
 
 const startedAt = performance.now();
 const cfg = JSON.parse(fs.readFileSync('verify.config.json', 'utf8'));
@@ -171,6 +172,53 @@ async function checkSubpath() {
   else ok(`${label} (console, service worker activated, manifest loaded)`);
 }
 
+async function checkTitleLaunch() {
+  const label = 'direct title launch';
+  const ctx = await browser.newContext({ serviceWorkers: 'block' });
+  const problems = new Set();
+  const requests = [];
+  try {
+    await ctx.addInitScript(() => localStorage.setItem('wtw.key.tmdb', 'fixture-placeholder'));
+    await ctx.route('https://api.themoviedb.org/3/**', async (route) => {
+      const { pathname } = new URL(route.request().url());
+      requests.push(pathname);
+      const fixtures = {
+        '/3/configuration': {},
+        '/3/movie/238': { ...movieDetails, id: 238, poster_path: null },
+        '/3/movie/238/watch/providers': { results: {} },
+        '/3/watch/providers/regions': { results: [] },
+      };
+      if (!(pathname in fixtures)) problems.add(`unexpected source request: ${pathname}`);
+      await route.fulfill({ json: fixtures[pathname] ?? {} });
+    });
+    const page = await ctx.newPage();
+    page.on('console', (message) => {
+      if (message.type() === 'error') problems.add(`console error: ${message.text()}`);
+    });
+    page.on('pageerror', (error) => problems.add(`page error: ${error.message}`));
+    await page.goto(origin + '/?t=movie/238&q=ignored&keep=yes#main');
+    await page.waitForURL(origin + '/?keep=yes#main', { timeout: 5000 });
+    await page.getByRole('heading', { name: movieDetails.title, exact: true }).waitFor({ timeout: 5000 });
+    const titleRequests = requests.filter((path) => path.startsWith('/3/movie/'));
+    if (titleRequests.join() !== '/3/movie/238,/3/movie/238/watch/providers') {
+      problems.add('expected one details request followed by one availability request');
+    }
+
+    requests.length = 0;
+    await page.goto(origin + '/?t=tv/abc', { waitUntil: 'networkidle' });
+    if (page.url() !== origin + '/' || await page.locator('#title h1').count()) {
+      problems.add('malformed reference did not leave a clean search screen');
+    }
+    if (requests.some((path) => path !== '/3/configuration')) problems.add('malformed reference requested source data');
+  } catch (error) {
+    problems.add(error.message);
+  } finally {
+    await ctx.close();
+  }
+  if (problems.size) problems.forEach((problem) => fail(`${label}: ${problem}`));
+  else ok(`${label} (details, availability, query priority, URL cleanup, invalid reference, console)`);
+}
+
 async function checkTextZoom(route) {
   const width = 390;
   const label = `${route} 200% text zoom at ${width}px`;
@@ -260,6 +308,7 @@ try {
   }
 
   await checkSubpath();
+  await checkTitleLaunch();
   await checkTextZoom('/');
   await checkTextZoom(pages.find((page) => isStatesPage(page.path)).path);
 
