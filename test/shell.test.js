@@ -59,3 +59,29 @@ test('modules reachable through static imports are in SHELL', () => {
 test('cache name follows shell-v<n>', () => {
   assert.match(sw, /const CACHE = 'shell-v\d+';/);
 });
+
+test('modules loaded on demand are cached for a fresh offline launch', () => {
+  const lazy = sw.match(/const LAZY = \[([^\]]*)\]/);
+  assert.ok(lazy, 'LAZY array not found in sw.js');
+  const entries = new Set([...lazy[1].matchAll(/(['"])(.*?)\1/g)].map((match) => requestUrl(match[2], scope).href));
+  assert.match(sw, /addAll\(\[\.\.\.SHELL, \.\.\.LAZY\]\)/);
+  const seen = new Set();
+  const walk = (url) => {
+    if (seen.has(url.href)) return;
+    seen.add(url.href);
+    const src = readFileSync(diskPath(url), 'utf8');
+    for (const [, specifier] of src.matchAll(/import\(\s*['"](\.[^'"]+)['"]\s*\)/g)) {
+      const target = requestUrl(specifier, url);
+      assert.ok(SHELL.has(target.href) || entries.has(target.href), `lazy module not cached: ${diskPath(target)}`);
+      walk(target);
+    }
+    for (const specifier of staticImports(diskPath(url))) {
+      const target = requestUrl(specifier, url);
+      if (target.origin !== scope.origin) continue;
+      assert.ok(SHELL.has(target.href) || entries.has(target.href), `dependency not cached: ${diskPath(target)}`);
+      if (diskPath(target).endsWith('.js')) walk(target);
+    }
+  };
+  for (const { name, url } of resources) if (name === 'src') walk(url);
+  for (const entry of entries) assert.ok(existsSync(diskPath(new URL(entry))), `LAZY entry missing on disk: ${entry}`);
+});

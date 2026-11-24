@@ -155,6 +155,8 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
       screen = renderSettings({
         settings,
         checkKey: app.checkKey,
+        sources: app.sources,
+        onCountryChange: () => titlePage?.refresh(),
         quotaLimit: app.quotaLimit,
         durable: app.durable,
         // The first saved key ends the first run: go back to search.

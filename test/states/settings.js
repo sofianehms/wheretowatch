@@ -29,7 +29,7 @@ function memoryStorage(initial = {}) {
   };
 }
 
-function mount(container, { stored = {}, storage: shared, check = async () => 'valid', onCleared, durable } = {}) {
+function mount(container, { stored = {}, storage: shared, check = async () => 'valid', onCleared, durable, sources, onCountryChange } = {}) {
   container.checks = [];
   const run = check;
   check = (provider, value, deps) => {
@@ -47,6 +47,8 @@ function mount(container, { stored = {}, storage: shared, check = async () => 'v
   const root = renderSettings({
     settings,
     checkKey: check,
+    sources,
+    onCountryChange,
     quotaLimit: () => quota.status().limit,
     durable,
     onCleared,
@@ -196,7 +198,68 @@ const failedSaveScenario = {
   check: (container) => container.problems,
 };
 
+const coverageOf = (...lists) => ({
+  activeSources: lists.map((list) => ({ listCoveredCountries: async () => list })),
+});
+
+// The reference country: sorted localized names, prefilled from the browser language, a choice is stored and announced.
+const countryScenario = {
+  name: 'Settings · reference country',
+  async render(container) {
+    container.changes = [];
+    container.mounted = mount(container, {
+      sources: coverageOf(['us', 'fr', 'jp'], ['de', 'FR']),
+      onCountryChange: (code) => container.changes.push(code),
+    });
+    await settle();
+    await settle();
+  },
+  check(container) {
+    const problems = checkNoOverflow(container);
+    const select = container.querySelector('.settings select');
+    if (!select) return [...problems, 'the country selector is missing'];
+    if (!select.labels?.length) problems.push('the country selector has no label');
+    if (!select.getAttribute('aria-describedby')) problems.push('the country selector has no help text');
+    const names = [...select.options].map((option) => option.textContent);
+    if (names.join() !== ['France', 'Germany', 'Japan', 'United Kingdom', 'United States'].join()) problems.push(`the options are ${names}`);
+    if (select.value !== 'gb') problems.push(`the prefilled country is ${select.value}`);
+    select.value = 'jp';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    if (container.mounted.settings.getPref('country') !== 'jp') problems.push('the choice is not stored');
+    if (container.changes.join() !== 'jp') problems.push('the change is not announced to the page');
+    return problems;
+  },
+};
+
+// A key saved from Settings enables another source: the open selector must offer its countries without reopening.
+const countryRefreshScenario = {
+  name: 'Settings · country list follows the active sources',
+  async render(container) {
+    const active = [{ listCoveredCountries: async () => ['fr'] }];
+    container.mounted = mount(container, { sources: { activeSources: active }, onCountryChange: () => {} });
+    container.active = active;
+    await settle();
+    await settle();
+  },
+  async check(container) {
+    const select = container.querySelector('.settings select');
+    if (!select) return ['the country selector is missing'];
+    const problems = [];
+    const before = [...select.options].map((option) => option.value).join();
+    if (!before.includes('fr') || before.includes('jp')) problems.push(`unexpected initial options: ${before}`);
+    container.active.push({ listCoveredCountries: async () => ['jp'] });
+    select.closest('section').refresh();
+    await settle();
+    await settle();
+    const after = [...select.options].map((option) => option.value);
+    if (!after.includes('jp') || !after.includes('fr')) problems.push(`the list did not refresh: ${after}`);
+    return problems;
+  },
+};
+
 const scenarios = [
+  countryScenario,
+  countryRefreshScenario,
   failedSaveScenario,
   themeScenario('Settings · dark theme chosen', 'Dark', 'dark', { stored: 'light' }),
   themeScenario('Settings · light theme chosen', 'Light', 'light'),
