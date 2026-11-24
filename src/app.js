@@ -1,5 +1,6 @@
 // Application shell: wires the services to the welcome, the search and the Settings screens.
 import { createTypeahead } from './core/typeahead.js';
+import { renderBanners, tmdbOnlyBanner } from './render/banners.js';
 import { renderHeader } from './render/header.js';
 import { render as renderSearch } from './render/search.js';
 import { renderSettings } from './render/settings.js';
@@ -22,6 +23,7 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
   const settingsSlot = root.querySelector('#settings');
 
   const searchSlot = root.querySelector('#search');
+  const bannersSlot = root.querySelector('#banners');
   const titleSlot = root.querySelector('#title') ?? searchView.appendChild(Object.assign((root.ownerDocument ?? root).createElement('div'), { id: 'title' }));
 
   let searchState = { status: 'idle' };
@@ -110,9 +112,13 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
 
   const openSettings = () => {
     firstRun = !settings.hasKey('tmdb');
+    syncBanners();
     store.set({ settingsOpen: true });
   };
-  const closeSettings = () => store.set({ settingsOpen: false });
+  const closeSettings = () => {
+    syncBanners();
+    store.set({ settingsOpen: false });
+  };
 
   let shown = null;
   let screen = null;
@@ -123,7 +129,21 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
     return settings.hasKey('tmdb') ? 'search' : 'welcome';
   }
 
+  // The second source decides the mode: with a TMDB key alone, languages are unavailable and the page says so.
+  function syncBanners() {
+    const mode = !settings.hasKey('tmdb') ? 'noKey' : settings.hasKey('sa') ? 'full' : 'tmdbOnly';
+    const { mode: previous, banners } = store.get();
+    if (previous === mode) return;
+    // Only the TMDB-only entry follows the mode; other notices are left alone.
+    const others = banners.filter(({ type }) => type !== 'tmdbOnly');
+    store.set({ mode, banners: mode === 'tmdbOnly' ? [tmdbOnlyBanner(), ...others] : others });
+  }
+
   function render(state) {
+    if (bannersSlot) renderBanners(bannersSlot, state.banners, {
+      onAction: (name) => { if (name === 'settings') openSettings(); },
+      onDismiss: (banner) => store.set({ banners: store.get().banners.filter((entry) => entry !== banner && entry.type !== banner.type) }),
+    });
     const view = currentView(state);
     const changed = view !== shown;
     if (changed) {
@@ -164,6 +184,7 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
           // An unverified key stays on screen so the user can read the outcome and test again.
           // Nor does the screen close while the other key is still being checked (leaving would cancel that save)
           // or while the erasure confirmation waits for the user's decision.
+          syncBanners();
           if (firstRun && settings.hasKey('tmdb') && !settings.isUnverified('tmdb') && !screen.pending() && !screen.confirming()) closeSettings();
         },
         onCleared: () => {
@@ -186,6 +207,7 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
     shown = view;
   }
 
+  syncBanners();
   store.subscribe(render);
   render(store.get());
 }
