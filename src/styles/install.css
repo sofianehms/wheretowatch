@@ -6,3 +6,5 @@
 .install ol { display: grid; gap: var(--space-2); font-size: var(--text-sm); }
 .install li { display: flex; gap: var(--space-2); align-items: center; }
 
+/* The hint belongs to the empty search screen: it steps aside for a typed query or an open title. */
+#search-view:has(.search__input:not(:placeholder-shown), #title > *) #install { display: none; }
