@@ -85,6 +85,7 @@
   --dialog-max: 26rem;   /* confirmation dialog width cap */
   --search-max: 36rem;   /* header search width cap on wide screens */
   --title-basis: 12rem;  /* title block wraps under the poster below this width */
+  --country-basis: 8rem; /* country row: the badge wraps under the name below this width */
   /* Breakpoints: 48rem (tablet) and 64rem (desktop). A media query cannot read a custom
      property, so the two thresholds stay literal in src/styles.css, search.css and title.css. */
 
