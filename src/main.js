@@ -4,6 +4,7 @@ import { compose } from './compose.js';
 import { cleanUrl, readLaunchParams } from './core/url.js';
 import { applyStaticStrings } from './i18n/strings.js';
 import { renderFooter } from './render/attribution.js';
+import { renderInstallHint } from './render/install.js';
 
 applyStaticStrings(document);
 renderFooter(document.getElementById('footer'));
@@ -15,7 +16,9 @@ function cleanLaunchUrl() {
   if (clean !== location.pathname + location.search + location.hash) history.replaceState(history.state, '', clean);
 }
 
-startApp(compose(), document, { launchQuery: q, launchTitle: t, onTitleLaunchComplete: cleanLaunchUrl });
+const app = compose();
+renderInstallHint(document.getElementById('install'), { settings: app.settings });
+startApp(app, document, { launchQuery: q, launchTitle: t, onTitleLaunchComplete: cleanLaunchUrl });
 if (t === null) cleanLaunchUrl();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {

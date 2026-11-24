@@ -1,6 +1,6 @@
 const prefix = 'wtw.';
 const providers = ['tmdb', 'sa'];
-const preferences = ['country', 'service', 'theme', 'lang'];
+const preferences = ['country', 'service', 'theme', 'lang', 'installHintDismissed'];
 
 function browserStorage() {
   try {
@@ -33,7 +33,7 @@ function storageName(names, name, segment = '') {
 export function createSettings({
   storage = browserStorage(), navigatorLike = globalThis.navigator, cache, quota,
 } = {}) {
-  const defaults = { country: defaultCountry(navigatorLike), service: null, theme: 'dark', lang: null };
+  const defaults = { country: defaultCountry(navigatorLike), service: null, theme: 'dark', lang: null, installHintDismissed: null };
   let persistenceRequested = false;
 
   function read(name) {
