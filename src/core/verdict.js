@@ -1,6 +1,7 @@
 import { byKey } from '../data/services.js';
 import { countryName, formatDate, formatNumber } from '../i18n/strings.js';
 import { country } from './normalize.js';
+import { offerService } from './reconcile.js';
 
 const responds = ({ status }) => status !== 'unavailable';
 
@@ -22,7 +23,7 @@ function homeVerdict(code, available, reconciled, snapshots, kind) {
 }
 
 /** Compute a service verdict from reconcile() and the same normalized snapshots. */
-export function computeVerdict({ reconciled, snapshots, serviceKey, homeCountry, mediaType }) {
+export function computeVerdict({ reconciled, snapshots, serviceKey, serviceMap, homeCountry, mediaType }) {
   const tmdbError = snapshots.some(({ source, status, error }) =>
     source === 'tmdb' && status === 'unavailable' && ['auth', 'network', 'server', 'timeout'].includes(error?.type));
   const responses = tmdbError ? [] : snapshots.filter(responds);
@@ -41,7 +42,7 @@ export function computeVerdict({ reconciled, snapshots, serviceKey, homeCountry,
     if (reconciled.coverage[snapshot.source].status !== 'unknown') continue;
     for (const offer of snapshot.offers) {
       const code = country(offer.country);
-      if (code && offer.serviceKey === serviceKey) available.add(code);
+      if (code && offerService(snapshot.source, offer, serviceMap).key === serviceKey) available.add(code);
     }
   }
   const kind = available.size > 0 ? 'available'
@@ -62,9 +63,7 @@ export function computeVerdict({ reconciled, snapshots, serviceKey, homeCountry,
     home: homeVerdict(country(homeCountry), available, reconciled, snapshots, kind),
     perSourceNotes,
     isSeries: mediaType === 'tv',
-    service: byKey(serviceKey)?.name ??
-      reportedOffers.flatMap(({ offers }) => offers).find((offer) => offer.serviceKey === serviceKey)?.serviceName ??
-      serviceKey,
+    service: reconciled.service?.name ?? byKey(serviceKey, serviceMap)?.name ?? serviceKey,
   };
 }
 
