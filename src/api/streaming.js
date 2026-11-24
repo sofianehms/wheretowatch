@@ -1,6 +1,7 @@
 import { country, offerType, serviceKey } from '../core/normalize.js';
 import { createCache } from './cache.js';
 import { HttpError, request } from './http.js';
+import { coverageKeys } from './sources.js';
 
 const baseUrl = 'https://api.movieofthenight.com/v4/';
 const source = 'sa';
@@ -115,10 +116,10 @@ export function createStreamingSource({ http = request, cache = createCache(), q
         : value;
     },
 
-    listCoveredCountries() {
-      const key = 'sa.countries';
+    listCoveredCountries({ signal } = {}) {
+      const key = coverageKeys.sa;
       return cachedRequest(key, async () => {
-        const countries = Object.keys(await get('countries')).map(country).filter(Boolean);
+        const countries = Object.keys(await get('countries', { signal })).map(country).filter(Boolean);
         cache.set(key, countries, { kind: 'config', source });
         return countries;
       });
