@@ -29,6 +29,9 @@
 .service-pick .select-wrap { flex: 1 1 var(--picker-basis); max-width: max-content; }
 .service-pick .select { width: 100%; }
 .select-wrap--block { display: block; }
+/* Optional service logo: its box is reserved before the image arrives; the artwork is shown as supplied. */
+.service-logo { flex: none; width: var(--logo-size); height: var(--logo-size); object-fit: contain; }
+.service-name { display: flex; align-items: center; gap: var(--space-2); }
 .select-wrap--block .select { width: 100%; }
 .select-wrap > .icon { position: absolute; right: var(--space-3); top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--color-text-muted); }
 .select {

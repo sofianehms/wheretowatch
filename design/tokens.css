@@ -111,6 +111,7 @@
   --poster-rail: 4.5rem;   /* 72 x 108 px recently viewed posters (w154) */
   --poster-card: 5rem;     /* 80 x 120 px result poster on phone (w185) */
   --poster-hero: 12rem;    /* 192 x 288 px result poster on desktop (w342) */
+  --logo-size: 1.5rem;     /* optional service logo beside a service name */
   --mark-size: 1.5rem;     /* product mark in the header */
   --icon-stroke: 2;        /* stroke width of every line icon (viewBox units) */
   --icon-offset: 0.1em;    /* optical alignment of a banner icon with its first line */

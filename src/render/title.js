@@ -358,7 +358,7 @@ const controllers = new WeakMap();
  *   verdict?: ReturnType<typeof import('../core/verdict.js').computeVerdict>,
  *   reconciled?: ReturnType<typeof import('../core/reconcile.js').reconcile>,
  *   imageConfiguration?: object|null,
- *   services?: {options: {key: string, name: string}[], selected: string,
+ *   services?: {options: {key: string, name: string, logoPath?: string}[], selected: string,
  *     all?: {reconciledAll: Map<string, object>, offers: object[], home: string|null}}}} state
  * @param {{onRetry?: () => void, onCheckKeys?: () => void, onServiceChange?: (key: string) => void}} [handlers]
  */
@@ -380,7 +380,7 @@ export function renderTitle(container, state, handlers = {}) {
   const { title, status, verdict, reconciled, imageConfiguration = null, services } = state;
   // No picker while loading, and none when the sources failed: there is nothing to choose between.
   const picker = status === 'result' && verdict.kind !== 'error' && services
-    ? servicePicker({ options: services.options, selected: services.selected, onChange: handlers.onServiceChange })
+    ? servicePicker({ options: services.options, selected: services.selected, onChange: handlers.onServiceChange, imageConfiguration })
     : null;
   parts.aside.replaceChildren(header(title, { isSeries: status === 'result' && verdict.isSeries, configuration: imageConfiguration, picker }));
   if (status === 'details' || status === 'loading') {
@@ -395,7 +395,7 @@ export function renderTitle(container, state, handlers = {}) {
     return parts;
   }
   const all = verdict.kind !== 'error' && services?.all
-    ? allServicesView({ ...services.all, kind: verdict.kind, coveredCountries: reconciled.coveredCountries, notes: sourceNotes(verdict, { all: true }) })
+    ? allServicesView({ ...services.all, kind: verdict.kind, coveredCountries: reconciled.coveredCountries, notes: sourceNotes(verdict, { all: true }), imageConfiguration })
     : null;
   parts.live.replaceChildren(all ? all.card : verdictCard(verdict, handlers, title, reconciled));
   if (verdict.kind === 'error') {
