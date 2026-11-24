@@ -101,6 +101,7 @@ h1 { font-size: var(--text-xl); }
 .icon-btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
 .link { color: var(--color-text); font-weight: var(--weight-medium); text-decoration: underline;
   display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--tap-size); }
+button.link { background: none; border: 0; padding: 0; border-radius: 0; cursor: pointer; } /* a button drawn as a link */
 .link--quiet { color: var(--color-text-muted); }
 p .link, li .link--inline { display: inline; min-height: 0; } /* links inside a sentence (WCAG 2.5.8 inline exception) */
 .btn-row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }

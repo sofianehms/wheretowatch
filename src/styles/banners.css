@@ -15,3 +15,4 @@
 .banner__title { display: block; font-weight: var(--weight-bold); color: var(--color-text-strong); }
 .banner__actions { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); align-items: center; }
 
+.banner:has(> .icon-btn) { grid-template-columns: auto minmax(0, 1fr) auto; }

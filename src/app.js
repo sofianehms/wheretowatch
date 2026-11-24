@@ -1,6 +1,6 @@
 // Application shell: wires the services to the welcome, the search and the Settings screens.
 import { createTypeahead } from './core/typeahead.js';
-import { renderBanners } from './render/banners.js';
+import { renderBanners, tmdbOnlyBanner } from './render/banners.js';
 import { renderHeader } from './render/header.js';
 import { render as renderSearch } from './render/search.js';
 import { renderSettings } from './render/settings.js';
@@ -132,11 +132,18 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
   // The second source decides the mode: with a TMDB key alone, languages are unavailable and the page says so.
   function syncBanners() {
     const mode = !settings.hasKey('tmdb') ? 'noKey' : settings.hasKey('sa') ? 'full' : 'tmdbOnly';
-    if (store.get().mode !== mode) store.set({ mode, banners: mode === 'tmdbOnly' ? [{ type: 'tmdbOnly' }] : [] });
+    const { mode: previous, banners } = store.get();
+    if (previous === mode) return;
+    // Only the TMDB-only entry follows the mode; other notices are left alone.
+    const others = banners.filter(({ type }) => type !== 'tmdbOnly');
+    store.set({ mode, banners: mode === 'tmdbOnly' ? [tmdbOnlyBanner(), ...others] : others });
   }
 
   function render(state) {
-    if (bannersSlot) renderBanners(bannersSlot, state.banners, { onOpenSettings: openSettings });
+    if (bannersSlot) renderBanners(bannersSlot, state.banners, {
+      onAction: (name) => { if (name === 'settings') openSettings(); },
+      onDismiss: (banner) => store.set({ banners: store.get().banners.filter((entry) => entry !== banner && entry.type !== banner.type) }),
+    });
     const view = currentView(state);
     const changed = view !== shown;
     if (changed) {
