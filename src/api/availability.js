@@ -1,0 +1,46 @@
+import { coverageKeys } from './sources.js';
+
+export async function assembleAvailability({ selected, snapshots, signal, cache, now }) {
+  async function readCoverage(source) {
+    const key = coverageKeys[source.id];
+    const cached = cache.get(key);
+    if (cached) return {
+      status: 'fresh', countries: cached.value, fetchedAt: new Date(cached.fetchedAt).toISOString(),
+    };
+    try {
+      if (!signal?.aborted) {
+        const countries = await source.listCoveredCountries({ signal });
+        const refreshed = cache.get(key);
+        const fetchedAt = refreshed?.fetchedAt ?? now();
+        if (!refreshed) cache.set(key, countries, { kind: 'metadata', source: source.id });
+        return { status: 'fresh', countries, fetchedAt: new Date(fetchedAt).toISOString() };
+      }
+    } catch {
+      // A failed refresh can still use the last list read from this provider.
+    }
+    const last = cache.getStale(key);
+    return last
+      ? { status: last.stale ? 'stale' : 'fresh', countries: last.value, fetchedAt: new Date(last.fetchedAt).toISOString() }
+      : { status: 'unknown' };
+  }
+
+  const tmdb = snapshots.find(({ source }) => source === 'tmdb');
+  const sa = snapshots.find(({ source }) => source === 'sa');
+  const imdbId = tmdb?.imdbId === undefined ? tmdb?.title?.imdbId : tmdb.imdbId;
+  const mismatch = sa?.status !== 'unavailable' && imdbId && sa?.imdbId && imdbId !== sa.imdbId;
+  const coverage = Object.fromEntries(await Promise.all(selected.map(async (source) =>
+    [source.id, await readCoverage(source)])));
+
+  return {
+    mode: sa && sa.status !== 'unavailable' ? 'full' : 'tmdbOnly',
+    coverage,
+    snapshots: snapshots.map((snapshot) => {
+      const list = coverage[snapshot.source];
+      const coveredCountries = list.countries ? new Set(list.countries).size : null;
+      if (snapshot === sa && mismatch) {
+        return { ...snapshot, status: 'notFound', offers: [], error: null, coveredCountries };
+      }
+      return { ...snapshot, coveredCountries };
+    }),
+  };
+}

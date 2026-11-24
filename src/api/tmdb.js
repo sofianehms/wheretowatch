@@ -1,7 +1,8 @@
-import { createCache } from './cache.js';
+import { createCache, TTL_BY_KIND } from './cache.js';
 import { HttpError, request } from './http.js';
 import { country, offerType, serviceKey } from '../core/normalize.js';
 import { getLocale as appLocale } from '../i18n/strings.js';
+import { coverageKeys } from './sources.js';
 
 const baseUrl = 'https://api.themoviedb.org/3/';
 const source = 'tmdb';
@@ -62,7 +63,7 @@ export function createTmdbSource({
   const recall = (key) => cache.get(key) ?? sessionMemo.get(key);
   function remember(key, value, meta) {
     cache.set(key, value, meta);
-    if (!cache.get(key)) sessionMemo.set(key, { value });
+    if (!cache.get(key)) sessionMemo.set(key, { value, fetchedAt: now() });
   }
 
   async function get(endpoint, params, signal, token = getToken()) {
@@ -112,11 +113,13 @@ export function createTmdbSource({
       return titles;
     },
 
-    async listCoveredCountries() {
-      const key = 'tmdb.regions';
-      const cached = recall(key);
-      if (cached) return cached.value;
-      const { results } = await get('watch/providers/regions');
+    async listCoveredCountries({ signal } = {}) {
+      const key = coverageKeys.tmdb;
+      const fresh = cache.get(key);
+      if (fresh) return fresh.value;
+      const cached = sessionMemo.get(key);
+      if (cached && now() - cached.fetchedAt < TTL_BY_KIND.metadata) return cached.value;
+      const { results } = await get('watch/providers/regions', undefined, signal);
       const countries = results.map(({ iso_3166_1 }) => iso_3166_1.toLowerCase());
       remember(key, countries, { kind: 'metadata', source });
       return countries;
@@ -142,6 +145,7 @@ export function createTmdbSource({
       const snapshot = {
         source,
         title,
+        imdbId: null,
         status: 'notFound',
         fetchedAt: new Date(now()).toISOString(),
         coveredCountries: null,
@@ -163,6 +167,7 @@ export function createTmdbSource({
         return {
           ...snapshot,
           fetchedAt,
+          imdbId: details?.imdbId ?? null,
           title: details ? { ...title, ref, imdbId: details.imdbId } : title,
         };
       }
@@ -181,6 +186,7 @@ export function createTmdbSource({
         }),
       ]);
       if (details.status === 'fulfilled') {
+        snapshot.imdbId = details.value.imdbId;
         snapshot.title = { ...title, ref, imdbId: details.value.imdbId };
       }
       if (signal?.aborted) {
