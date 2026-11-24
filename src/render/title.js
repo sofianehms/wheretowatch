@@ -335,7 +335,8 @@ const controllers = new WeakMap();
  */
 export function renderTitle(container, state, handlers = {}) {
   let parts = controllers.get(container);
-  if (!parts) {
+  // The slot may have been emptied by its owner (a new query): rebuild rather than fill a detached tree.
+  if (!parts || parts.root.parentNode !== container) {
     const root = el('div', 'result result-grid');
     const aside = el('div', 'result-aside');
     const main = el('div', 'result-main');
@@ -344,7 +345,7 @@ export function renderTitle(container, state, handlers = {}) {
     main.append(live, rest);
     root.append(aside, main);
     container.replaceChildren(root);
-    parts = { aside, live, rest };
+    parts = { root, aside, live, rest };
     controllers.set(container, parts);
   }
   const { title, status, verdict, reconciled, imageConfiguration = null } = state;

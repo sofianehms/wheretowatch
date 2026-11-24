@@ -639,8 +639,9 @@ const scenarios = [
       });
       const snapshot = (source, offers) => ({ source, status: 'offers', fetchedAt: '2026-11-22T12:00:00Z', coveredCountries: null, offers, error: null });
       const sources = {
-        async searchTitles() {
-          return { titles: [{ mediaType: 'movie', tmdbId: 11, imdbId: null, title: 'Harbour Lights', year: 2023, posterPath: null, ref: 'movie/11' }], error: null };
+        async searchTitles(query) {
+          const [name, id] = query === 'second' ? ['Second Tide', 12] : ['Harbour Lights', 11];
+          return { titles: [{ mediaType: 'movie', tmdbId: id, imdbId: null, title: name, year: 2023, posterPath: null, ref: `movie/${id}` }], error: null };
         },
         async loadAvailability() {
           return {
@@ -654,16 +655,33 @@ const scenarios = [
       container.querySelector('#search [role="option"]').click();
       for (let wait = 0; wait < 50 && !container.querySelector('#title .country__toggle'); wait += 1) await new Promise((resolve) => setTimeout(resolve, 20));
     },
-    check(container) {
+    async check(container) {
       const problems = [];
-      if (!container.querySelector('#title .verdict')) problems.push('the title page shows no verdict');
-      const toggle = container.querySelector('#title .country__toggle');
-      if (!toggle) return [...problems, 'the country row is missing'];
-      toggle.click();
-      if (!/French/.test(container.querySelector('#title .langs').textContent)) problems.push('the audio language is not shown after opening the row');
-      container.querySelector('#search input').value = 'x';
-      container.querySelector('#search input').dispatchEvent(new Event('input', { bubbles: true }));
+      const wait = async (ready) => {
+        for (let tries = 0; tries < 50 && !ready(); tries += 1) await new Promise((resolve) => setTimeout(resolve, 20));
+      };
+      const openRow = (label) => {
+        if (!container.querySelector('#title .verdict')) problems.push(`${label}: the title page shows no verdict`);
+        const toggle = container.querySelector('#title .country__toggle');
+        if (!toggle) { problems.push(`${label}: the country row is missing`); return; }
+        toggle.click();
+        const panel = container.querySelector('#title .langs');
+        if (toggle.getAttribute('aria-expanded') !== 'true' || !panel || panel.closest('[hidden]') || !panel.getClientRects().length) {
+          problems.push(`${label}: the language panel is not visible after opening the row`);
+        } else if (!/French/.test(panel.textContent)) problems.push(`${label}: the audio language is not shown`);
+      };
+      openRow('first title');
+      const input = container.querySelector('#search input');
+      input.value = 'second';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
       if (container.querySelector('#title').childElementCount !== 0) problems.push('typing a new query keeps the old title page');
+      await wait(() => /Second Tide/.test(container.querySelector('#search [role="option"]')?.textContent ?? ''));
+      const option = container.querySelector('#search [role="option"]');
+      if (!option || !/Second Tide/.test(option.textContent)) return [...problems, 'the second suggestion is not listed'];
+      option.click();
+      await wait(() => container.querySelector('#title .country__toggle'));
+      if (!/Second Tide/.test(container.querySelector('#title').textContent)) problems.push('the second title is not rendered');
+      openRow('second title');
       return problems;
     },
   },
