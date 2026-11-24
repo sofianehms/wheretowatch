@@ -73,7 +73,7 @@ test('fetches a typed title once per 24 hours and normalizes offers from all cou
   assert.equal(first.error, null);
   assert.deepEqual(first.offers.map(({ country }) => country).sort(), ['fr', 'us']);
   assert.deepEqual(first.offers.find(({ country }) => country === 'us'), {
-    country: 'us', serviceKey: 'netflix', serviceName: 'Netflix', serviceLogoPath: null,
+    country: 'us', serviceKey: 'netflix', serviceName: 'Netflix', serviceId: 'netflix', serviceLogoPath: null,
     offerType: 'subscription', source: 'sa', link: movie.streamingOptions.us[0].link,
     quality: 'uhd', expiresOn: new Date(1801440000 * 1000).toISOString(),
     languages: [

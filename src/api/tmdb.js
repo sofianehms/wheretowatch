@@ -22,6 +22,7 @@ function normalizeProviders(results) {
           country: normalizedCountry,
           serviceKey: service.key,
           serviceName: provider.provider_name,
+          serviceId: provider.provider_id,
           serviceLogoPath: provider.logo_path ?? null,
           offerType: offerType(source, group),
           source,

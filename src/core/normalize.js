@@ -35,11 +35,11 @@ export function offerType(source, raw) {
 }
 
 /** Resolve a registered service or keep the source's identity and display name. */
-export function serviceKey(source, rawId, rawName) {
+export function serviceKey(source, rawId, rawName, map) {
   const lookup = serviceLookups.get(source);
   if (!lookup || rawId == null || rawId === '') return null;
 
-  const service = lookup(rawId);
+  const service = lookup(rawId, map);
   if (service) return { key: service.key, name: service.name };
   return { key: `${source}:${rawId}`, name: rawName };
 }

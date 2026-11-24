@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { SERVICE_MAP } from '../src/data/services.js';
+import { computeVerdict, verdictText } from '../src/core/verdict.js';
+import { t } from '../src/i18n/strings.js';
 import { reconcile, reconcileAll } from '../src/core/reconcile.js';
 import {
   disagreement, divergingTypes, outsideSaCoverage, saAbsent, saNotRecognized,
@@ -79,7 +82,7 @@ test('covered countries are deduplicated and change with the lists', () => {
   assert.equal(changed.coveredCountries.size, original.coveredCountries.size + 1);
 });
 
-test('unknown coverage contributes to neither country counts nor service groups', () => {
+test('unknown coverage retains service metadata and excludes country rows and counts', () => {
   const input = {
     ...divergingTypes,
     coverage: { ...divergingTypes.coverage, sa: { status: 'unknown', countries: ['fr', 'de'] } },
@@ -96,12 +99,12 @@ test('unknown coverage contributes to neither country counts nor service groups'
   assert.deepEqual(resultWithoutCoverage.coveredCountries, new Set());
   assert.equal(resultWithoutCoverage.confirmedCount, 0);
   assert.equal(resultWithoutCoverage.coverage.sa.status, 'unknown');
-  assert.equal(reconcileAll(unknown).size, 0);
+  assert.deepEqual([...reconcileAll(unknown).keys()], ['netflix', 'tmdb:9902']);
 });
 
 test('reconcileAll groups offers by service with the same result as individual reconciliation', () => {
   const results = reconcileAll(disagreement);
-  assert.deepEqual([...results.keys()], ['netflix', 'prime-video']);
+  assert.deepEqual([...results.keys()], ['netflix', 'tmdb:9902', 'sa:lantern']);
   for (const [serviceKey, result] of results) {
     assert.deepEqual(result, reconcile({ ...disagreement, serviceKey }));
     assert.ok(result.countries.every(({ offers }) =>
@@ -111,4 +114,69 @@ test('reconcileAll groups offers by service with the same result as individual r
   assert.deepEqual(missing.countries, []);
   assert.deepEqual(missing.coveredCountries, new Set(['fr', 'ca', 'de']));
   assert.equal(missing.confirmedCount, 0);
+});
+
+const syntheticKey = 'pebble-cinema';
+const mapping = {
+  key: syntheticKey,
+  name: 'Pebble Registry Name',
+  tmdbProviderId: 9902,
+  saServiceId: '9902',
+};
+const tmdbOffer = {
+  ...divergingTypes.snapshots[0].offers[0],
+  serviceKey: 'tmdb:9902',
+  serviceId: 9902,
+  serviceName: 'Pebble Cinema',
+  serviceLogoPath: '/pebble-cinema.png',
+};
+const saOffer = {
+  ...divergingTypes.snapshots[1].offers[0],
+  serviceKey: 'sa:9902',
+  serviceId: '9902',
+  serviceName: 'Pebble Cinema',
+};
+const synthetic = {
+  coverage: divergingTypes.coverage,
+  snapshots: divergingTypes.snapshots.map((snapshot, index) => ({
+    ...snapshot, offers: [snapshot.offers[0], index === 0 ? tmdbOffer : saOffer],
+  })),
+};
+
+test('keeps unmapped services single even when both sources return the same name and ID text', () => {
+  const grouped = reconcileAll(synthetic);
+  assert.deepEqual([...grouped.keys()], ['netflix', 'tmdb:9902', 'sa:9902']);
+  const tmdbOnly = grouped.get('tmdb:9902');
+  assert.deepEqual(tmdbOnly.service, {
+    key: 'tmdb:9902', name: 'Pebble Cinema', sourceIds: { tmdb: 9902 }, serviceLogoPath: '/pebble-cinema.png',
+  });
+  assert.equal(tmdbOnly.countries[0].state, 'single');
+  assert.equal(grouped.get('sa:9902').countries[0].state, 'single');
+  assert.equal(grouped.get('netflix').countries[0].state, 'confirmed');
+  const verdict = computeVerdict({ ...synthetic, reconciled: tmdbOnly, serviceKey: 'tmdb:9902' });
+  assert.match(verdictText(verdict, t), /Available on Pebble Cinema/);
+});
+
+test('only a verified map entry joins the two source identifiers, including cached offers', () => {
+  const cached = {
+    ...synthetic,
+    snapshots: [
+      { ...synthetic.snapshots[0], offers: [synthetic.snapshots[0].offers[0], { ...tmdbOffer, serviceId: undefined }] },
+      synthetic.snapshots[1],
+    ],
+  };
+  const serviceMap = { ...SERVICE_MAP, [syntheticKey]: mapping };
+  assert.deepEqual(reconcileAll({ ...cached, serviceMap }), reconcileAll(cached));
+
+  serviceMap[syntheticKey] = { ...mapping, verifiedBy: 'Synthetic provider fixtures' };
+  const grouped = reconcileAll({ ...cached, serviceMap });
+  assert.deepEqual([...grouped.keys()], ['netflix', syntheticKey]);
+  const result = grouped.get(syntheticKey);
+  assert.equal(result.service.name, tmdbOffer.serviceName);
+  assert.deepEqual(result.service.sourceIds, { tmdb: 9902, sa: '9902' });
+  assert.equal(result.countries[0].state, 'confirmed');
+  assert.equal(result.confirmedCount, 1);
+  assert.equal(result.countries[0].offers.tmdb.length, 1);
+  assert.equal(result.countries[0].offers.sa.length, 1);
+  assert.deepEqual(result, reconcile({ ...cached, serviceMap, serviceKey: syntheticKey }));
 });

@@ -4,10 +4,9 @@ import { byKey, bySaId, byTmdbId, DEFAULT_SERVICE, SERVICE_MAP, SHOW_SERVICE_LOG
 import tmdbServices from './fixtures/tmdb/movie-services.js';
 import saCountries from './fixtures/sa/countries.js';
 
-test('registers only the default service and disables service logos', () => {
+test('requires identifier provenance for every mapping', () => {
   assert.equal(DEFAULT_SERVICE, 'netflix');
   assert.equal(SHOW_SERVICE_LOGOS, false);
-  assert.deepEqual(Object.keys(SERVICE_MAP), [DEFAULT_SERVICE]);
 
   for (const [key, service] of Object.entries(SERVICE_MAP)) {
     assert.equal(service.key, key);

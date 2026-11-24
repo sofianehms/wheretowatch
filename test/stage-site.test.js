@@ -16,7 +16,7 @@ const index = `<!doctype html><html><head>
 </head><body></body></html>`;
 
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(process.cwd(), 'stage-site-test-'));
+  const root = fs.mkdtempSync(path.join(process.cwd(), '.stage-site-test-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const directory of ['src', 'design']) fs.mkdirSync(path.join(root, directory));
   for (const [file, content] of Object.entries({

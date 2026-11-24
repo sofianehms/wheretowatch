@@ -1,13 +1,30 @@
-import { country } from './normalize.js';
+import { byKey } from '../data/services.js';
+import { country, serviceKey as resolveServiceKey } from './normalize.js';
 
 const sourceIds = ['tmdb', 'sa'];
+
+/** Resolve offers from both current and previously cached snapshots. */
+export function offerService(source, offer, map) {
+  const prefix = `${source}:`;
+  const registered = byKey(offer.serviceKey, map);
+  const cachedId = offer.serviceKey.startsWith(prefix) ? offer.serviceKey.slice(prefix.length) : null;
+  const id = offer.serviceId ?? (source === 'tmdb'
+    ? registered?.tmdbProviderId ?? (cachedId === null ? null : Number(cachedId))
+    : registered?.saServiceId ?? cachedId);
+  const identity = resolveServiceKey(source, id, offer.serviceName, map);
+  return {
+    key: identity?.key ?? `${prefix}${cachedId ?? offer.serviceKey}`,
+    name: offer.serviceName ?? identity?.name ?? registered?.name ?? offer.serviceKey,
+    id,
+  };
+}
 
 function readCoverage(entry) {
   if (entry?.status !== 'fresh' && entry?.status !== 'stale') return null;
   return new Set(entry.countries.map(country).filter(Boolean));
 }
 
-function collect({ snapshots, coverage }) {
+function collect({ snapshots, coverage, serviceMap }) {
   const snapshotsBySource = new Map(snapshots.map((snapshot) => [snapshot.source, snapshot]));
   const coveredCountries = new Set();
   const fetchedAt = { tmdb: null, sa: null };
@@ -21,23 +38,34 @@ function collect({ snapshots, coverage }) {
     sources[id] = { countries, recognizesTitle, coverage: coverage[id] };
     fetchedAt[id] = snapshot?.fetchedAt ?? null;
 
-    if (!countries || !recognizesTitle) continue;
-    for (const code of countries) coveredCountries.add(code);
+    if (!recognizesTitle) continue;
+    for (const code of countries ?? []) coveredCountries.add(code);
 
     for (const offer of snapshot.offers) {
+      const { key, name, id: serviceId } = offerService(id, offer, serviceMap);
+      if (!services.has(key)) {
+        services.set(key, {
+          service: { key, name, sourceIds: {} },
+          verified: byKey(key, serviceMap) !== null,
+          byCountry: new Map(),
+        });
+      }
+      const { service, byCountry } = services.get(key);
+      service.sourceIds[id] = serviceId;
+      if (offer.serviceLogoPath) service.serviceLogoPath ??= offer.serviceLogoPath;
+
       const code = country(offer.country);
-      if (!code) continue;
-      if (!services.has(offer.serviceKey)) services.set(offer.serviceKey, new Map());
-      const byCountry = services.get(offer.serviceKey);
+      if (!countries || !code) continue;
       if (!byCountry.has(code)) byCountry.set(code, { tmdb: [], sa: [] });
-      byCountry.get(code)[id].push(offer);
+      byCountry.get(code)[id].push(key === offer.serviceKey ? offer : { ...offer, serviceKey: key });
     }
   }
 
   return { coveredCountries, fetchedAt, sources, services };
 }
 
-function classify(code, offers, sources) {
+function classify(code, offers, sources, verified) {
+  if (!verified) return 'single';
   if (offers.tmdb.length && offers.sa.length) return 'confirmed';
 
   const other = offers.tmdb.length ? sources.sa : sources.tmdb;
@@ -50,11 +78,11 @@ function types(offers) {
   return [...new Set(offers.map(({ offerType }) => offerType))];
 }
 
-function summarize(byCountry, { coveredCountries, fetchedAt, sources }) {
+function summarize(entry, { coveredCountries, fetchedAt, sources }) {
   let confirmedCount = 0;
   const countries = [];
-  for (const [code, offers] of byCountry ?? []) {
-    const state = classify(code, offers, sources);
+  for (const [code, offers] of entry?.byCountry ?? []) {
+    const state = classify(code, offers, sources, entry.verified);
     if (state === 'confirmed') confirmedCount += 1;
     countries.push({
       country: code,
@@ -72,7 +100,7 @@ function summarize(byCountry, { coveredCountries, fetchedAt, sources }) {
       fetchedAt: source.coverage?.fetchedAt ?? null,
     }];
   }));
-  return { countries, coveredCountries: new Set(coveredCountries), confirmedCount, coverage };
+  return { service: entry?.service ?? null, countries, coveredCountries: new Set(coveredCountries), confirmedCount, coverage };
 }
 
 /**
@@ -80,16 +108,17 @@ function summarize(byCountry, { coveredCountries, fetchedAt, sources }) {
  * Coverage is keyed by source ID. Fresh and stale entries carry a countries array,
  * and stale entries include the list's fetchedAt date. Rows carry snapshot dates.
  * Each row represents an available country. The populated offer arrays identify
- * which sources reported the service.
- * @param {{snapshots: import('../api/sources.js').SourceSnapshot[], coverage: Object<string, {status: 'fresh'|'stale'|'unknown', countries?: string[], fetchedAt?: string}>, serviceKey: string}} options
+ * which sources reported the service. Service metadata is retained even when
+ * coverage is unknown and the result has no country rows.
+ * @param {{snapshots: import('../api/sources.js').SourceSnapshot[], coverage: Object<string, {status: 'fresh'|'stale'|'unknown', countries?: string[], fetchedAt?: string}>, serviceKey: string, serviceMap?: object}} options
  */
-export function reconcile({ snapshots, coverage, serviceKey }) {
-  const data = collect({ snapshots, coverage });
+export function reconcile({ snapshots, coverage, serviceKey, serviceMap }) {
+  const data = collect({ snapshots, coverage, serviceMap });
   return summarize(data.services.get(serviceKey), data);
 }
 
 /** Return a Map from reported service keys to their reconciliation results. */
-export function reconcileAll({ snapshots, coverage }) {
-  const data = collect({ snapshots, coverage });
-  return new Map([...data.services].map(([key, countries]) => [key, summarize(countries, data)]));
+export function reconcileAll({ snapshots, coverage, serviceMap }) {
+  const data = collect({ snapshots, coverage, serviceMap });
+  return new Map([...data.services].map(([key, entry]) => [key, summarize(entry, data)]));
 }

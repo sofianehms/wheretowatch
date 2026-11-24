@@ -25,7 +25,8 @@ function normalizeOffers(options) {
       return [{
         country: normalizedCountry,
         serviceKey: service.key,
-        serviceName: service.name,
+        serviceName: entry.service.name ?? service.name,
+        serviceId: entry.service.id,
         serviceLogoPath: null,
         offerType: type,
         source,

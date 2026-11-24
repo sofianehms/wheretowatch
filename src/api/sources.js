@@ -25,6 +25,7 @@ import { HttpError } from './http.js';
  * @property {string} country Country code.
  * @property {string} serviceKey
  * @property {string} serviceName
+ * @property {number|string} [serviceId] Identifier reported by the source.
  * @property {string|null} serviceLogoPath TMDB logo path, null when absent or from another source.
  * @property {string} offerType
  * @property {string} source Source ID.
