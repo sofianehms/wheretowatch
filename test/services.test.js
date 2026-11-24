@@ -6,7 +6,7 @@ import saCountries from './fixtures/sa/countries.js';
 
 test('requires identifier provenance for every mapping', () => {
   assert.equal(DEFAULT_SERVICE, 'netflix');
-  assert.equal(SHOW_SERVICE_LOGOS, false);
+  assert.equal(typeof SHOW_SERVICE_LOGOS, 'boolean');
 
   for (const [key, service] of Object.entries(SERVICE_MAP)) {
     assert.equal(service.key, key);

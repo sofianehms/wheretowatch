@@ -1,5 +1,6 @@
 // Title page states, built from the reconcile datasets (#16) run through reconcile() and computeVerdict().
 import { HttpError } from '../../src/api/http.js';
+import { SHOW_SERVICE_LOGOS } from '../../src/data/services.js';
 import { reconcile } from '../../src/core/reconcile.js';
 import { computeVerdict } from '../../src/core/verdict.js';
 import { servicesState } from '../../src/render/service-picker.js';
@@ -8,6 +9,7 @@ import { createTitlePage } from '../../src/title-page.js';
 import {
   disagreement, divergingTypes, outsideSaCoverage, saAbsent, saNotRecognized,
 } from '../fixtures/reconcile/scenarios.js';
+import { resolveToken } from './kit.js';
 
 const movie = {
   mediaType: 'movie', tmdbId: 11, imdbId: null, title: 'Harbour Lights', year: 2023, posterPath: null, ref: 'movie/11',
@@ -310,6 +312,51 @@ const singleSource = {
   coverage: { tmdb: withoutNetflix.coverage.tmdb },
   snapshots: withoutNetflix.snapshots.filter(({ source }) => source === 'tmdb'),
 };
+
+// The same catalogue with a logo path on every TMDB offer: images appear only when the build setting allows them.
+const withLogos = (input) => ({
+  ...input,
+  snapshots: input.snapshots.map((snapshot) => (snapshot.source !== 'tmdb' ? snapshot : {
+    ...snapshot, offers: snapshot.offers.map((entry) => ({ ...entry, serviceLogoPath: `/logo-${entry.serviceId}.png` })),
+  })),
+});
+const logoCatalogue = withLogos(catalogue([
+  ['Canal+', 'fr', 'subscription', 381], ['Streaming Service With A Very Long Name', 'fr', 'rent', 2],
+]));
+
+// Logos sit beside the names, in their reserved box; a logo that fails to load leaves the name alone.
+async function checkLogos(container, names) {
+  const logos = [...container.querySelectorAll('img.service-logo')];
+  const expected = SHOW_SERVICE_LOGOS ? names : [];
+  const problems = [];
+  const shown = logos.map((logo) => logo.alt).join(', ');
+  if (shown !== expected.join(', ')) problems.push(`wrong logos: "${shown}" instead of "${expected.join(', ')}"`);
+  const size = parseFloat(resolveToken('--logo-size', 'width'));
+  for (const logo of logos) {
+    const box = logo.getBoundingClientRect();
+    if (box.width !== size || box.height !== size) problems.push(`the ${logo.alt} logo box is ${box.width} × ${box.height} px`);
+    logo.loading = 'eager';
+    await logo.decode().catch(() => problems.push(`the ${logo.alt} logo did not load`));
+  }
+  return problems;
+}
+
+function logoScenario(name, choice, names, verify = () => []) {
+  const scenario = serviceScenario(name, logoCatalogue, { choice });
+  const { check } = scenario;
+  return { ...scenario, async check(container) { return [...check(container), ...await checkLogos(container, names), ...verify(container)]; } };
+}
+
+const logoScenarios = [
+  logoScenario('Title · service logos, all services', 'all', ['Canal+', 'Streaming Service With A Very Long Name']),
+  logoScenario('Title · service logo of the selected service', 'tmdb:381', ['Canal+'], checkPicker),
+  logoScenario('Title · service logo that fails to load', 'all', ['Canal+', 'Streaming Service With A Very Long Name'], (container) => {
+    for (const logo of container.querySelectorAll('img.service-logo')) logo.dispatchEvent(new Event('error'));
+    const problems = container.querySelector('img.service-logo') ? ['a failed logo stays in the page'] : [];
+    if (!/Canal\+/.test(text(container, '.groups'))) problems.push('the service name is gone with its logo');
+    return problems;
+  }),
+];
 
 const serviceScenarios = [
   serviceScenario('Title · all services, coverage of one source unknown', unknownCoverage(withoutNetflix, 'tmdb'), {
@@ -644,6 +691,7 @@ const scenarios = [
     },
   }),
   ...serviceScenarios,
+  ...logoScenarios,
 ];
 
 export default scenarios;
