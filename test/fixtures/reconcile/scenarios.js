@@ -32,7 +32,7 @@ export const divergingTypes = {
 
 export const outsideSaCoverage = {
   coverage: { ...coverage, sa: { status: 'fresh', countries: ['de'] } },
-  snapshots: [tmdb, snapshot('sa', [], 'empty')],
+  snapshots: [tmdb, snapshot('sa', [offer('sa', 'de')])],
 };
 
 export const saAbsent = {

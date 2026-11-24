@@ -38,7 +38,7 @@ test('diverging types retain each source’s offers, types and snapshot dates', 
   }]);
 });
 
-test('conflict keeps one-sided availability when the other source recognizes the title and covers the country', () => {
+test('conflict keeps one-sided availability for a shared service in covered countries', () => {
   const result = netflix(disagreement);
   assert.equal(result.confirmedCount, 0);
   assert.deepEqual(result.countries.map(({ country, state }) => [country, state]), [
@@ -46,13 +46,40 @@ test('conflict keeps one-sided availability when the other source recognizes the
   ]);
   assert.deepEqual(result.countries[0].offers.sa, []);
 
-  const [tmdb, sa] = disagreement.snapshots;
-  const empty = netflix({ ...disagreement, snapshots: [{ ...tmdb, status: 'empty', offers: [] }, sa],
-    coverage: { ...disagreement.coverage, tmdb: { status: 'fresh', countries: ['de'] } } });
-  assert.equal(empty.countries[0].state, 'conflict');
+  const bothCovered = netflix({
+    ...disagreement,
+    coverage: { ...disagreement.coverage, tmdb: { status: 'fresh', countries: ['fr', 'ca', 'de'] } },
+  });
+  assert.deepEqual(bothCovered.countries.map(({ country, state }) => [country, state]), [
+    ['fr', 'conflict'], ['de', 'conflict'],
+  ]);
 });
 
-test('outsideSaCoverage uses a known SA list for TMDB-only offers', () => {
+test('verified services reported by one source stay single regardless of the other source’s coverage', () => {
+  const { coverage, snapshots: [tmdb, sa] } = divergingTypes;
+  for (const [reporting, other] of [[tmdb, sa], [sa, tmdb]]) {
+    const offer = { ...reporting.offers[0], serviceName: 'Netflix' };
+    const otherOffer = { ...other.offers[0], serviceKey: other.source === 'tmdb' ? 'tmdb:9902' : 'sa:lantern' };
+    for (const otherSnapshot of [
+      { ...other, status: 'empty', offers: [] },
+      { ...other, offers: [otherOffer] },
+    ]) {
+      for (const countries of [['fr'], ['de']]) {
+        const input = {
+          snapshots: [{ ...reporting, offers: [offer] }, otherSnapshot],
+          coverage: { ...coverage, [other.source]: { status: 'fresh', countries } },
+        };
+        const result = reconcileAll(input).get('netflix');
+        assert.deepEqual(result, netflix(input));
+        assert.equal(result.service.name, offer.serviceName);
+        assert.deepEqual(Object.keys(result.service.sourceIds), [reporting.source]);
+        assert.deepEqual(result.countries.map(({ country, state }) => [country, state]), [['fr', 'single']]);
+      }
+    }
+  }
+});
+
+test('outsideSaCoverage uses a known SA list for TMDB-only countries of a shared service', () => {
   const result = netflix(outsideSaCoverage);
   assert.equal(result.countries[0].state, 'outsideSaCoverage');
   assert.deepEqual(result.coveredCountries, new Set(['fr', 'ca', 'de']));

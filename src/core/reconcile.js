@@ -35,7 +35,7 @@ function collect({ snapshots, coverage, serviceMap }) {
     const snapshot = snapshotsBySource.get(id);
     const countries = readCoverage(coverage[id]);
     const recognizesTitle = snapshot?.status === 'offers' || snapshot?.status === 'empty';
-    sources[id] = { countries, recognizesTitle, coverage: coverage[id] };
+    sources[id] = { countries, coverage: coverage[id] };
     fetchedAt[id] = snapshot?.fetchedAt ?? null;
 
     if (!recognizesTitle) continue;
@@ -46,7 +46,6 @@ function collect({ snapshots, coverage, serviceMap }) {
       if (!services.has(key)) {
         services.set(key, {
           service: { key, name, sourceIds: {} },
-          verified: byKey(key, serviceMap) !== null,
           byCountry: new Map(),
         });
       }
@@ -64,13 +63,13 @@ function collect({ snapshots, coverage, serviceMap }) {
   return { coveredCountries, fetchedAt, sources, services };
 }
 
-function classify(code, offers, sources, verified) {
-  if (!verified) return 'single';
+function classify(code, offers, sources, sourceIds) {
+  if (!Object.hasOwn(sourceIds, 'tmdb') || !Object.hasOwn(sourceIds, 'sa')) return 'single';
   if (offers.tmdb.length && offers.sa.length) return 'confirmed';
 
   const other = offers.tmdb.length ? sources.sa : sources.tmdb;
   if (offers.tmdb.length && other.countries && !other.countries.has(code)) return 'outsideSaCoverage';
-  if (other.recognizesTitle && other.countries?.has(code)) return 'conflict';
+  if (other.countries?.has(code)) return 'conflict';
   return 'single';
 }
 
@@ -82,7 +81,7 @@ function summarize(entry, { coveredCountries, fetchedAt, sources }) {
   let confirmedCount = 0;
   const countries = [];
   for (const [code, offers] of entry?.byCountry ?? []) {
-    const state = classify(code, offers, sources, entry.verified);
+    const state = classify(code, offers, sources, entry.service.sourceIds);
     if (state === 'confirmed') confirmedCount += 1;
     countries.push({
       country: code,

@@ -3,11 +3,23 @@ import { readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
 import { tokenizer } from 'acorn';
 import { SERVICE_MAP } from '../src/data/services.js';
+import saCountries from './fixtures/sa/countries.js';
+import tmdbMovies from './fixtures/tmdb/movie-services.js';
+import tmdbSeries from './fixtures/tmdb/series-services.js';
 
 const src = new URL('../src/', import.meta.url);
 const entries = Object.values(SERVICE_MAP);
-const names = new Set(entries.flatMap(({ key, name, saServiceId }) => [key, name, saServiceId]));
-const providerIds = new Set(entries.map(({ tmdbProviderId }) => tmdbProviderId));
+const tmdbProviders = [...tmdbMovies.results, ...tmdbSeries.results];
+const saServices = Object.values(saCountries).flatMap(({ services }) => services);
+const names = new Set([
+  ...entries.flatMap(({ key, name, saServiceId }) => [key, name, saServiceId]),
+  ...tmdbProviders.map(({ provider_name }) => provider_name),
+  ...saServices.flatMap(({ id, name }) => [id, name]),
+]);
+const providerIds = new Set([
+  ...entries.map(({ tmdbProviderId }) => tmdbProviderId),
+  ...tmdbProviders.map(({ provider_id }) => provider_id),
+]);
 const providerIdStrings = new Set([...providerIds].map(String));
 const unrelatedNumbers = new Map([
   ['api/tmdb.js', '        .slice(0, 8)'],
@@ -37,7 +49,8 @@ function hardcodedServices(path, source) {
   for (const token of tokenizer(source, { ecmaVersion: 'latest', locations: true })) {
     const kind = token.type.label;
     const isProviderId = (kind === 'num' && providerIds.has(token.value))
-      || (['string', 'template'].includes(kind) && providerIdStrings.has(token.value));
+      || (['string', 'template'].includes(kind)
+        && (providerIdStrings.has(token.value) || /^(?:tmdb:\d+|sa:[\w-]+)$/.test(token.value)));
     if (!isProviderId) continue;
     const line = lines[token.loc.start.line - 1];
     if (line === unrelatedNumbers.get(path)) continue;
@@ -57,4 +70,11 @@ test('detects a hard-coded service by name, string ID or numeric provider ID', (
     assert.ok(hardcodedServices(path, `const service = ${JSON.stringify(literal)};`).length);
   }
   assert.ok(hardcodedServices(path, 'const service = `' + tmdbProviderId + '`;').length);
+});
+
+test('detects unmapped provider literals from both source catalogs', () => {
+  const path = 'core/example.js';
+  for (const literal of ['Pebble Cinema', 9902, '9902', 'tmdb:9902', 'Lantern Screen', 'lantern', 'sa:lantern']) {
+    assert.ok(hardcodedServices(path, `const service = ${JSON.stringify(literal)};`).length, String(literal));
+  }
 });
