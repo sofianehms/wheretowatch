@@ -25,6 +25,9 @@
 .service-pick label { font-size: var(--text-sm); color: var(--color-text-muted); }
 .select-wrap { position: relative; display: inline-block; max-width: 100%; min-width: 0; }
 .select { max-width: 100%; text-overflow: ellipsis; }
+/* The select takes what the label leaves on the row; both wrap only when less than the basis remains (zoom). */
+.service-pick .select-wrap { flex: 1 1 var(--picker-basis); max-width: max-content; }
+.service-pick .select { width: 100%; }
 .select-wrap--block { display: block; }
 .select-wrap--block .select { width: 100%; }
 .select-wrap > .icon { position: absolute; right: var(--space-3); top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--color-text-muted); }
