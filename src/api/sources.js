@@ -64,7 +64,6 @@ import { HttpError } from './http.js';
 /**
  * Select the adapters for the current mode. Composition supplies adapters only
  * for providers with a configured key.
- * @param {{sources: Source[], mode?: 'tmdb+sa'|'sa-only'}} options
  */
 export function createSources({ sources, mode = SOURCE_MODE }) {
   const searchId = mode === 'sa-only' ? 'sa' : 'tmdb';

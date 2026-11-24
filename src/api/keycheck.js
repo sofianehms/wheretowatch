@@ -36,19 +36,13 @@ async function checkKey(url, headers, { fetchImpl = globalThis.fetch, signal, ti
 }
 
 /**
- * @param {string} token TMDB bearer token.
- * @param {KeyCheckDeps} [deps]
- * @returns {Promise<KeyCheckResult>}
  */
 export function checkTmdbKey(token, deps = {}) {
   return checkKey(tmdbConfiguration, { Authorization: `Bearer ${token}` }, deps);
 }
 
 /**
- * @param {string} key Streaming Availability API key.
- * @param {KeyCheckDeps & {quota: {canCall: () => boolean, record: () => void}}} deps
  * The quota is required. A quota storage failure resolves to 'network'.
- * @returns {Promise<KeyCheckResult>}
  */
 export async function checkSaKey(key, { quota, ...deps }) {
   try {

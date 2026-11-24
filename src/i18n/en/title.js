@@ -48,5 +48,4 @@ export default {
   'link.tmdb': 'View on TMDB',
   'link.service': 'Open on {service}',
   'covered.summary': '{countries}',
-  'covered.empty': 'No covered countries are known.',
 };
