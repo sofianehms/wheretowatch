@@ -1,5 +1,5 @@
 // Minimal offline shell cache. A new worker waits and activates on the next launch. Bump CACHE when shipped files change.
-const CACHE = 'shell-v21';
+const CACHE = 'shell-v22';
 const SHELL = [
   './', 'index.html', 'design/tokens.css', 'src/styles.css',
   'src/styles/search.css', 'src/styles/settings.css', 'src/styles/banners.css', 'src/styles/about.css', 'src/styles/install.css', 'src/styles/footer.css',
@@ -7,7 +7,7 @@ const SHELL = [
   'manifest.webmanifest', 'src/api/cache.js', 'src/api/http.js', 'src/api/keycheck.js', 'src/api/quota.js',
   'src/api/sources.js', 'src/config.js', 'src/settings/keys.js', 'src/core/images.js', 'src/core/typeahead.js', 'src/core/url.js', 'src/api/tmdb.js',
   'src/core/normalize.js', 'src/data/services.js',
-  'src/render/dom.js', 'src/render/banners.js', 'src/render/header.js', 'src/render/search.js', 'src/render/settings.js', 'src/render/welcome.js',
+  'src/render/dom.js', 'src/render/banners.js', 'src/render/header.js', 'src/render/attribution.js', 'src/render/search.js', 'src/render/settings.js', 'src/render/welcome.js',
   'src/styles/not-found.css', 'icon.svg', 'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
   'src/i18n/strings.js', 'src/i18n/en/common.js', 'src/i18n/en/search.js', 'src/i18n/en/title.js',
   'src/i18n/en/verdict.js', 'src/i18n/en/settings.js', 'src/i18n/en/banners.js', 'src/i18n/en/about.js',

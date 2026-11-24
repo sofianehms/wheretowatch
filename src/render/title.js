@@ -2,6 +2,7 @@
 import { posterSrcset } from '../core/images.js';
 import { verdictText } from '../core/verdict.js';
 import { countryName, formatDate, formatNumber, t } from '../i18n/strings.js';
+import { justWatchNotice, nightNotice } from './attribution.js';
 import { el, externalLink, icon, uniqueId } from './dom.js';
 import { languageRow } from './languages.js';
 
@@ -122,7 +123,7 @@ function homeRow(verdict) {
   return line;
 }
 
-function verdictCard(verdict, handlers, title) {
+function verdictCard(verdict, handlers, title, reconciled) {
   const id = uniqueId('verdict-head');
   const card = el('section', `verdict verdict--${verdictClasses[verdict.kind]}`, '', { 'aria-labelledby': id });
   const mark = icon(verdictIcons[verdict.kind], 'lg');
@@ -165,7 +166,7 @@ function verdictCard(verdict, handlers, title) {
       list.append(item);
     }
     body.append(list);
-    if (title.ref) body.append(externalLink(tmdbUrl(title), t('title.checkTmdb'), 'btn btn--secondary'));
+    if (title.ref) body.append(externalLink(tmdbLink(title, reconciled, verdict), t('title.checkTmdb'), 'btn btn--secondary'));
   } else {
     const headline = verdict.kind === 'available'
       ? t(verdict.count === null ? 'verdict.available.uncounted' : 'verdict.available', { service: verdict.service, countries: verdict.count === null ? '' : countLabel(verdict.count) })
@@ -270,16 +271,30 @@ function safeLink(value) {
   }
 }
 
-function serviceLink(reconciled, verdict) {
+function sourceLink(source, reconciled, verdict) {
   const home = verdict.home?.country;
-  const rows = [...reconciled.countries].sort((a, b) => Number(b.country === home) - Number(a.country === home));
+  const rows = [...(reconciled?.countries ?? [])].sort((a, b) => Number(b.country === home) - Number(a.country === home));
   for (const row of rows) {
-    for (const offer of row.offers.sa) {
+    for (const offer of row.offers[source]) {
       const href = offer.link && safeLink(offer.link);
       if (href) return href;
     }
   }
   return null;
+}
+
+const serviceLink = (reconciled, verdict) => sourceLink('sa', reconciled, verdict);
+
+// The watch-provider page TMDB supplies with its availability data, for any service (home country first);
+// the plain title page is the fallback.
+function tmdbLink(title, reconciled, verdict) {
+  const links = reconciled?.tmdbLinks ?? new Map();
+  const home = verdict.home?.country;
+  for (const href of [links.get(home), ...links.values()]) {
+    const safe = href && safeLink(href);
+    if (safe) return safe;
+  }
+  return sourceLink('tmdb', reconciled, verdict) ?? tmdbUrl(title);
 }
 
 function coveredCountries(reconciled) {
@@ -311,8 +326,12 @@ function dataNote(title, reconciled, verdict) {
     lines.append(el('li', '', t(entry.stale ? 'verdict.source.stale' : 'verdict.source.retrieved', { source: sourceName(entry.source), date })));
   }
   note.append(lines);
+  // Each source's contractual notice sits with its data: only for a source that answered.
+  const answered = (id) => verdict.perSourceNotes.some(({ source, status }) => source === id && status !== 'unavailable');
+  if (answered('tmdb')) note.append(justWatchNotice());
+  if (answered('sa')) note.append(nightNotice());
   const links = el('div', 'data-note__links');
-  if (title.ref) links.append(externalLink(tmdbUrl(title), t('title.link.tmdb'), 'link'));
+  if (title.ref) links.append(externalLink(tmdbLink(title, reconciled, verdict), t('title.link.tmdb'), 'link'));
   const direct = serviceLink(reconciled, verdict);
   if (direct) links.append(externalLink(direct, t('title.link.service', { service: verdict.service }), 'link'));
   if (links.childElementCount > 0) note.append(links);
@@ -361,7 +380,7 @@ export function renderTitle(container, state, handlers = {}) {
     parts.rest.replaceChildren();
     return parts;
   }
-  parts.live.replaceChildren(verdictCard(verdict, handlers, title));
+  parts.live.replaceChildren(verdictCard(verdict, handlers, title, reconciled));
   if (verdict.kind === 'error') {
     parts.rest.replaceChildren();
     return parts;

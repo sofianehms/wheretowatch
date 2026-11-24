@@ -297,9 +297,24 @@ try {
         const name = `${route.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'index'}-${vp.name}-${scheme}.png`;
         await page.screenshot({ path: path.join(shotsDir, name), fullPage: true });
         await checkOverflow(page, vp.width, report);
-        const axe = await new AxeBuilder({ page }).analyze();
-        for (const v of axe.violations.filter((x) => ['serious', 'critical'].includes(x.impact))) {
+        // The states gallery stacks many independent screens on one page, so the same landmark names repeat
+        // across screens by construction: landmark uniqueness is checked screen by screen, in isolation, and
+        // every other rule, at every impact level, applies to the whole page as everywhere else.
+        const builder = new AxeBuilder({ page });
+        if (isStatesPage(route)) builder.disableRules(['landmark-unique']);
+        const axe = await builder.analyze();
+        for (const v of axe.violations) {
           report(`axe ${v.impact}: ${v.id} (${v.nodes.length} node(s))`);
+        }
+        if (isStatesPage(route)) {
+          const screens = await page.locator('#scenarios > section').count();
+          for (let i = 1; i <= screens; i += 1) {
+            const isolated = await new AxeBuilder({ page }).include(`#scenarios > section:nth-child(${i})`).withRules(['landmark-unique']).analyze();
+            for (const v of isolated.violations) {
+              const name = await page.locator(`#scenarios > section:nth-child(${i}) > h2`).textContent();
+              report(`axe ${v.impact}: ${v.id} in "${name}" (${v.nodes.length} node(s))`);
+            }
+          }
         }
         await ctx.close();
         problems.size ? problems.forEach((p) => fail(`${label}: ${p}`)) : ok(`${label} (theme, origin, axe, layout, console)`);

@@ -32,7 +32,7 @@ const wide = (() => {
   return {
     coverage: { tmdb: { status: 'fresh', countries: codes }, sa: { status: 'fresh', countries: codes.filter((code) => code !== 'ar') } },
     snapshots: [
-      snapshot('tmdb', [...codes.filter((code) => code !== withoutOffer).map((code) => offer('tmdb', code)), offer('tmdb', 'fr', 'rent'), offer('tmdb', 'de', 'free')]),
+      snapshot('tmdb', [...codes.filter((code) => code !== withoutOffer).map((code) => offer('tmdb', code, 'subscription', 'https://www.themoviedb.org/movie/11/watch?locale=' + code.toUpperCase())), offer('tmdb', 'fr', 'rent'), offer('tmdb', 'de', 'free')]),
       snapshot('sa', [
         ...codes.slice(0, 15).map((code) => offer('sa', code, 'subscription', code === 'fr' ? 'https://www.netflix.com/title/80000001' : null)),
         offer('sa', 'jp', 'rent'),
@@ -40,6 +40,18 @@ const wide = (() => {
     ],
   };
 })();
+
+// Only TMDB answers, with a rental on another service: the watch-provider page still comes from its response.
+const tmdbOnlyRental = {
+  coverage: { tmdb: { status: 'fresh', countries: ['fr', 'us'] } },
+  snapshots: [{
+    source: 'tmdb', status: 'offers', fetchedAt: '2026-11-21T12:00:00Z', coveredCountries: null, error: null,
+    offers: [{
+      source: 'tmdb', country: 'fr', serviceKey: 'tmdb:2', serviceName: 'Apple TV', serviceId: 2, serviceLogoPath: null, offerType: 'rent',
+      link: 'https://www.themoviedb.org/movie/11/watch?locale=FR', quality: null, expiresOn: null, languages: [],
+    }],
+  }],
+};
 
 function compute(input, { serviceKey = 'netflix', homeCountry = 'FR', mediaType = 'movie' } = {}) {
   const reconciled = reconcile({ ...input, serviceKey });
@@ -99,6 +111,14 @@ function checkVerdictContent(container, verdict) {
     const exact = new RegExp(`\\b${verdict.count} (?:covered )?countr(?:y|ies)\\b`);
     if (!exact.test(counted)) problems.push(`the verdict does not show the ${verdict.count} countries`);
   } else if (countPattern.test(counted)) problems.push('the verdict shows a count despite unknown coverage');
+  // Each answering source carries its contractual notice, and only that source.
+  const noteText = text(container, '.data-note');
+  const night = container.querySelector('.data-note a[href="https://www.movieofthenight.com/about/api"]');
+  for (const [id, shownNotice] of [['tmdb', noteText.includes('Availability data: JustWatch')], ['sa', Boolean(night)]]) {
+    const answered = responding.some(({ source }) => source === id);
+    if (answered !== shownNotice) problems.push(`the ${id} attribution notice is ${shownNotice ? 'shown without' : 'missing for'} its data`);
+  }
+  if (night && !noteText.includes('Streaming availability information is provided by Streaming Availability API by Movie of the Night')) problems.push('the Movie of the Night notice wording differs');
   if (/\b(nowhere|never)\b/i.test(full)) problems.push('forbidden wording');
   return problems;
 }
@@ -235,7 +255,7 @@ const scenarios = [
       if (container.querySelectorAll('.countries li[hidden]').length !== hiddenBefore) problems.push('the show-fewer control does not collapse the list');
       const names = [...container.querySelectorAll('.group:first-of-type .country__name')].map((node) => node.firstChild.textContent);
       if (names.join('|') !== [...names].sort((a, b) => a.localeCompare(b)).join('|')) problems.push('the countries are not listed A to Z');
-      problems.push(...has(container, '.data-note a[href^="https://www.themoviedb.org/movie/11"]', 'the TMDB link'));
+      problems.push(...has(container, '.data-note a[href^="https://www.themoviedb.org/movie/11/watch?locale="]', 'the TMDB watch-provider link'));
       problems.push(...has(container, '.data-note a[href^="https://www.netflix.com/"]', 'the direct service link'));
       problems.push(...has(container, '.covered', 'the list of covered countries'));
       return problems;
@@ -296,6 +316,17 @@ const scenarios = [
       const problems = [];
       if (!/Coverage of a source unknown/.test(text(container, '.banner'))) problems.push('the unknown coverage notice is missing');
       if (countPattern.test(text(container, '.verdict__headline'))) problems.push('a country count is shown');
+      return problems;
+    },
+  }),
+  scenario('Title · TMDB only, another service rents it', result(tmdbOnlyRental), {
+    verify(container) {
+      const problems = [];
+      const tmdbWatch = 'https://www.themoviedb.org/movie/11/watch?locale=FR';
+      const link = [...container.querySelectorAll('.data-note a')].find((node) => node.textContent.includes('TMDB'));
+      if (link?.getAttribute('href') !== tmdbWatch) problems.push(`the TMDB link goes to ${link?.getAttribute('href') ?? 'nowhere'}, not ${tmdbWatch}`);
+      if (!text(container, '.data-note').includes('Availability data: JustWatch')) problems.push('the JustWatch notice is missing');
+      if (container.querySelector('.data-note a[href="https://www.movieofthenight.com/about/api"]')) problems.push('the Movie of the Night notice is shown without its data');
       return problems;
     },
   }),

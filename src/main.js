@@ -3,8 +3,10 @@ import { startApp } from './app.js';
 import { compose } from './compose.js';
 import { cleanUrl, readLaunchParams } from './core/url.js';
 import { applyStaticStrings } from './i18n/strings.js';
+import { renderFooter } from './render/attribution.js';
 
 applyStaticStrings(document);
+renderFooter(document.getElementById('footer'));
 const { q, t } = readLaunchParams(location.search);
 
 // The launch parameters are consumed: leave a clean address behind.
