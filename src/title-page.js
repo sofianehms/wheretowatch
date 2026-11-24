@@ -4,6 +4,7 @@ import { reconcile } from './core/reconcile.js';
 import { computeVerdict } from './core/verdict.js';
 import { DEFAULT_SERVICE } from './data/services.js';
 import { t } from './i18n/strings.js';
+import { servicesState } from './render/service-picker.js';
 import { renderTitle } from './render/title.js';
 
 /**
@@ -23,13 +24,23 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
 
   function present() {
     const { title, snapshots, coverage, retry } = shown;
-    const serviceKey = app.settings.getPref('service') ?? DEFAULT_SERVICE;
-    const reconciled = reconcile({ snapshots, coverage, serviceKey });
+    // Everything below comes from the data already loaded: changing the service never makes a request.
     const homeCountry = app.settings.getPref('country');
-    const verdict = computeVerdict({ reconciled, snapshots, serviceKey, homeCountry, mediaType: title.mediaType });
-    renderTitle(slot, { status: 'result', title, verdict, reconciled, imageConfiguration: imageConfiguration() }, {
-      onRetry: retry, onCheckKeys,
+    const services = servicesState({ snapshots, coverage }, app.settings.getPref('service'), homeCountry);
+    // "All services" still reads the sources' state through the default service's verdict.
+    const serviceKey = services.all ? DEFAULT_SERVICE : services.selected;
+    const reconciled = reconcile({ snapshots, coverage, serviceKey, aliases: services.aliases });
+    const verdict = computeVerdict({ reconciled, snapshots, serviceKey, aliases: services.aliases, homeCountry, mediaType: title.mediaType });
+    renderTitle(slot, { status: 'result', title, verdict, reconciled, imageConfiguration: imageConfiguration(), services }, {
+      onRetry: retry, onCheckKeys, onServiceChange: changeService,
     });
+  }
+
+  function changeService(key) {
+    app.settings.setPref('service', key);
+    present();
+    // The page is redrawn: keep the keyboard where the user was.
+    slot.querySelector('.service-pick select')?.focus();
   }
 
   function clear() {

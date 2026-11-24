@@ -2,7 +2,9 @@
 import { HttpError } from '../../src/api/http.js';
 import { reconcile } from '../../src/core/reconcile.js';
 import { computeVerdict } from '../../src/core/verdict.js';
+import { servicesState } from '../../src/render/service-picker.js';
 import { renderTitle } from '../../src/render/title.js';
+import { createTitlePage } from '../../src/title-page.js';
 import {
   disagreement, divergingTypes, outsideSaCoverage, saAbsent, saNotRecognized,
 } from '../fixtures/reconcile/scenarios.js';
@@ -55,7 +57,7 @@ const tmdbOnlyRental = {
 
 function compute(input, { serviceKey = 'netflix', homeCountry = 'FR', mediaType = 'movie' } = {}) {
   const reconciled = reconcile({ ...input, serviceKey });
-  const verdict = computeVerdict({ reconciled, snapshots: input.snapshots, serviceKey, homeCountry, mediaType });
+  const verdict = computeVerdict({ reconciled, snapshots: input.snapshots, serviceKey, aliases: input.aliases, homeCountry, mediaType });
   return { reconciled, verdict };
 }
 
@@ -226,6 +228,202 @@ const closeLanguages = ({ toggle, panel }, name) => {
   toggle.click();
   return toggle.getAttribute('aria-expanded') === 'false' && panel.hidden ? [] : [`${name} does not close`];
 };
+
+// ---- Service picker and "All services" view ----
+const svcOffer = (source, country, serviceName, offerType = 'subscription', serviceId = null) => ({
+  source, country, serviceKey: source === 'tmdb' ? `tmdb:${serviceId}` : `sa:${serviceName}`, serviceName, serviceId: source === 'tmdb' ? serviceId : serviceName,
+  serviceLogoPath: null, offerType, link: null, quality: null, expiresOn: null, languages: [],
+});
+const svcSnapshot = (source, offers) => ({
+  source, status: 'offers', fetchedAt: source === 'tmdb' ? '2026-11-21T12:00:00Z' : '2026-11-22T12:00:00Z', coveredCountries: null, offers, error: null,
+});
+function catalogue(entries, countries = ['fr', 'us']) {
+  const tmdbOffers = entries.map(([name, country, type, id]) => svcOffer('tmdb', country, name, type, id));
+  const saOffers = entries.filter((entry, index) => index % 2 === 0).map(([name, country, type, id]) => svcOffer('sa', country, name, type, id));
+  return {
+    coverage: { tmdb: { status: 'fresh', countries }, sa: { status: 'fresh', countries } },
+    snapshots: [svcSnapshot('tmdb', tmdbOffers), svcSnapshot('sa', saOffers)],
+  };
+}
+// Netflix has no offer here, other services do (some only in another country).
+const withoutNetflix = catalogue([
+  ['Canal+', 'fr', 'subscription', 381], ['Apple TV', 'fr', 'rent', 2], ['Prime Video', 'fr', 'rent', 119],
+  ['Prime Video', 'fr', 'buy', 119], ['Disney Plus', 'us', 'subscription', 337],
+]);
+const fifteen = catalogue(Array.from({ length: 15 }, (_, index) => [`Streaming Service Number ${index + 1}`, 'fr', 'subscription', 1000 + index]));
+
+// Renders the page for one service choice, and again whenever the picker changes (the data never changes).
+function serviceScenario(name, input, { choice = null, home = 'fr', verify = () => [] } = {}) {
+  return {
+    name,
+    render(container) {
+      let current = choice;
+      const draw = () => {
+        const services = servicesState(input, current, home);
+        const key = services.all ? 'netflix' : services.selected;
+        renderTitle(container, { status: 'result', title: movie, ...compute({ ...input, aliases: services.aliases }, { serviceKey: key, homeCountry: home }), services }, {
+          onServiceChange(next) { current = next; draw(); container.querySelector('.service-pick select').focus(); },
+        });
+      };
+      draw();
+    },
+    check(container) {
+      return [...checkLive(container), ...checkFits(container), ...verify(container)];
+    },
+  };
+}
+const select = (container) => container.querySelector('.service-pick select');
+const choose = (container, value) => {
+  select(container).value = value;
+  select(container).dispatchEvent(new Event('change', { bubbles: true }));
+};
+function checkPicker(container) {
+  const field = select(container);
+  if (!field) return ['the service picker is missing'];
+  const problems = [];
+  const label = container.querySelector(`label[for="${field.id}"]`);
+  if (label?.textContent !== 'Service') problems.push('the picker has no visible "Service" label');
+  const names = [...field.options].map((option) => option.textContent);
+  if (names[0] !== 'Netflix') problems.push(`Netflix is not first (${names[0]})`);
+  if (names.at(-1) !== 'All services') problems.push('"All services" is not the last entry');
+  const [labelBox, fieldBox] = [label, field].map((node) => node?.getBoundingClientRect());
+  if (labelBox && !(labelBox.right <= fieldBox.left && labelBox.top < fieldBox.bottom && labelBox.bottom > fieldBox.top)) {
+    problems.push('the "Service" label is not on the left of the select, on the same row');
+  }
+  return problems;
+}
+
+// Each row of the "All services" view as "type / service / source".
+const allRows = (container) => [...container.querySelectorAll('section.group')].flatMap((group) => [...group.querySelectorAll('.country')]
+  .map((row) => `${group.querySelector('.group__title').textContent} / ${text(row, '.country__name')} / ${text(row, '.badge')}`));
+const checkRows = (container, expected) => (allRows(container).join('; ') === expected.join('; ') ? [] : [`wrong rows: ${allRows(container).join('; ')}`]);
+const TMDB_ONLY = 'JustWatch via TMDB only';
+const homeRows = (appleSource) => [
+  'Subscription / Canal+ / Confirmed', `Rent / Apple TV / ${appleSource}`, 'Rent / Prime Video / Confirmed', `Buy / Prime Video / ${TMDB_ONLY}`,
+];
+
+// The coverage endpoint of one or both sources failed: the offers they listed are still known.
+const unknownCoverage = (input, ...sources) => ({
+  ...input, coverage: { ...input.coverage, ...Object.fromEntries(sources.map((id) => [id, { status: 'unknown' }])) },
+});
+const singleSource = {
+  coverage: { tmdb: withoutNetflix.coverage.tmdb },
+  snapshots: withoutNetflix.snapshots.filter(({ source }) => source === 'tmdb'),
+};
+
+const serviceScenarios = [
+  serviceScenario('Title · all services, coverage of one source unknown', unknownCoverage(withoutNetflix, 'tmdb'), {
+    choice: 'all',
+    verify(container) {
+      const problems = checkRows(container, homeRows(TMDB_ONLY));
+      if (!/4 ways to watch in France/.test(text(container, '.verdict__headline'))) problems.push(`wrong headline: ${text(container, '.verdict__headline')}`);
+      if (!/JustWatch via TMDB is not known, so this list may be incomplete/.test(text(container, '.verdict'))) problems.push('the unknown coverage is not reported');
+      return problems;
+    },
+  }),
+  serviceScenario('Title · all services, coverage of both sources unknown', unknownCoverage(withoutNetflix, 'tmdb', 'sa'), {
+    choice: 'all',
+    verify(container) {
+      const problems = checkRows(container, homeRows(TMDB_ONLY));
+      if (container.querySelectorAll('.verdict .banner').length !== 2) problems.push('both unknown coverages are not reported');
+      return problems;
+    },
+  }),
+  serviceScenario('Title · all services, unknown coverage and no listed offer at home', unknownCoverage(withoutNetflix, 'tmdb', 'sa'), {
+    choice: 'all', home: 'jp',
+    verify: (container) => /Not enough data to conclude/.test(text(container, '.verdict__headline')) && container.querySelector('.verdict .banner')
+      ? [] : [`an absence is claimed despite unknown coverage: ${text(container, '.verdict__headline')}`],
+  }),
+  serviceScenario('Title · all services, single source', singleSource, {
+    choice: 'all',
+    verify: (container) => checkRows(container, [
+      `Subscription / Canal+ / ${TMDB_ONLY}`, `Rent / Apple TV / ${TMDB_ONLY}`, `Rent / Prime Video / ${TMDB_ONLY}`, `Buy / Prime Video / ${TMDB_ONLY}`,
+    ]),
+  }),
+
+  serviceScenario('Title · picker, Netflix absent while other services are present', withoutNetflix, {
+    verify(container) {
+      const problems = checkPicker(container);
+      const names = [...select(container).options].map((option) => option.textContent);
+      if (names.join('|') !== 'Netflix|Apple TV|Canal+|Disney Plus|Prime Video|All services') problems.push(`unexpected entries: ${names.join('|')}`);
+      if (!/Not found on Netflix/.test(text(container, '.verdict__headline'))) problems.push('Netflix is not reported as absent');
+      choose(container, 'tmdb:119');
+      if (select(container).value !== 'tmdb:119' || !/Available on Prime Video in 1 country/.test(text(container, '.verdict__headline'))) problems.push(`choosing Prime Video does not recompute the verdict: ${text(container, '.verdict__headline')}`);
+      if (document.activeElement !== select(container)) problems.push('the picker lost the keyboard focus after a change');
+      return problems;
+    },
+  }),
+  serviceScenario('Title · picker, service without an offer in the reference country', withoutNetflix, {
+    choice: 'tmdb:337',
+    verify(container) {
+      return /Not on Disney Plus/.test(text(container, '.home')) ? [] : [`the reference country line is wrong: ${text(container, '.home')}`];
+    },
+  }),
+  serviceScenario('Title · all services, reference country', withoutNetflix, {
+    choice: 'all',
+    verify(container) {
+      const problems = checkPicker(container);
+      if (select(container).value !== 'all') problems.push('"All services" is not selected');
+      if (!/4 ways to watch in France/.test(text(container, '.verdict__headline'))) problems.push(`wrong headline: ${text(container, '.verdict__headline')}`);
+      const groups = [...container.querySelectorAll('section.group')].map((node) => node.querySelector('.group__title').textContent);
+      if (groups.join() !== 'Subscription,Rent,Buy') problems.push(`wrong groups: ${groups}`);
+      problems.push(...checkRows(container, homeRows(TMDB_ONLY)));
+      if (container.querySelector('.home')) problems.push('the single-service country line is still shown');
+      choose(container, 'netflix');
+      if (!/Not found on Netflix/.test(text(container, '.verdict__headline'))) problems.push('going back to a service does not restore its verdict');
+      return problems;
+    },
+  }),
+  serviceScenario('Title · all services, no offer in the reference country', catalogue([['Canal+', 'fr', 'subscription', 381]], ['fr', 'jp']), {
+    choice: 'all', home: 'jp',
+    verify: (container) => /No offer found in Japan/.test(text(container, '.verdict__headline')) ? [] : ['the empty all-services state is missing'],
+  }),
+  serviceScenario('Title · all services, reference country covered by no source', withoutNetflix, {
+    choice: 'all', home: 'jp',
+    verify: (container) => /Not enough data to conclude/.test(text(container, '.verdict__headline')) ? [] : ['an uncovered country is reported as without offer'],
+  }),
+  serviceScenario('Title · all services, no reference country', withoutNetflix, {
+    choice: 'all', home: null,
+    verify: (container) => /Choose your country in Settings/.test(text(container, '.verdict')) ? [] : ['the missing country is not explained'],
+  }),
+  serviceScenario('Title · picker, fifteen services (390 px, no horizontal scroll)', fifteen, {
+    choice: 'all',
+    verify(container) {
+      const problems = checkPicker(container);
+      if (select(container).options.length !== 17) problems.push(`expected 17 entries, saw ${select(container).options.length}`);
+      if (!/15 ways to watch in France/.test(text(container, '.verdict__headline'))) problems.push('the fifteen services are not all counted');
+      if (document.documentElement.scrollWidth > document.documentElement.clientWidth) problems.push('the page scrolls horizontally');
+      return problems;
+    },
+  }),
+  {
+    // Changing the service must not call the sources again: the page recomputes from the data it holds.
+    name: 'Title · picker, changing the service sends no request',
+    async render(container) {
+      const calls = { availability: 0 };
+      const prefs = new Map();
+      const app = {
+        settings: { getPref: (name) => prefs.get(name) ?? (name === 'country' ? 'fr' : null), setPref: (name, value) => prefs.set(name, value) },
+        sources: { async loadAvailability() { calls.availability += 1; return withoutNetflix; } },
+      };
+      const page = createTitlePage({ app, slot: container, root: document, imageConfiguration: () => null, onCheckKeys() {} });
+      await page.show(movie);
+      container.calls = calls;
+      container.prefs = prefs;
+    },
+    check(container) {
+      const problems = [];
+      if (container.calls.availability !== 1) problems.push(`expected 1 request to load the title, saw ${container.calls.availability}`);
+      choose(container, 'tmdb:119');
+      choose(container, 'all');
+      choose(container, 'netflix');
+      if (container.calls.availability !== 1) problems.push(`changing the service sent ${container.calls.availability - 1} request(s)`);
+      if (container.prefs.get('service') !== 'netflix') problems.push('the choice is not stored with setPref("service")');
+      if (document.activeElement !== select(container)) problems.push('the picker lost the keyboard focus');
+      return problems;
+    },
+  },
+];
 
 const scenarios = [
   scenario('Title · loading', { status: 'loading', title: movie }, {
@@ -445,6 +643,7 @@ const scenarios = [
       return buttons.length === 1 && container.log.join() === 'retry' ? [] : ['"Try again" is not the single action'];
     },
   }),
+  ...serviceScenarios,
 ];
 
 export default scenarios;

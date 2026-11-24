@@ -3,8 +3,10 @@ import { posterSrcset } from '../core/images.js';
 import { verdictText } from '../core/verdict.js';
 import { countryName, formatDate, formatNumber, t } from '../i18n/strings.js';
 import { justWatchNotice, nightNotice } from './attribution.js';
+import { allServicesView } from './all-services.js';
 import { el, externalLink, icon, uniqueId } from './dom.js';
 import { languageRow } from './languages.js';
+import { servicePicker } from './service-picker.js';
 
 const TONES = 6;
 // Countries listed before the "Show more" control, per offer type.
@@ -36,7 +38,7 @@ function poster(title, configuration) {
   return frame;
 }
 
-function header(title, { isSeries, configuration }) {
+function header(title, { isSeries, configuration, picker }) {
   const tone = (title.tmdbId ?? 0) % TONES + 1;
   const head = el('div', `title-head tone-${tone}`);
   const info = el('div', 'title-head__info');
@@ -45,6 +47,7 @@ function header(title, { isSeries, configuration }) {
   meta.append(el('span', '', t(`title.type.${title.mediaType}`)));
   if (isSeries) meta.append(el('span', '', t('title.meta.series')));
   info.append(el('h1', 'title-head__name', title.title), meta);
+  if (picker) info.append(picker);
   head.append(poster(title, configuration), info);
   return head;
 }
@@ -90,21 +93,22 @@ function detailLine(verdict) {
   return parts.join(' · ');
 }
 
-function banner(key, params) {
+function banner(key, params, text = 'text') {
   const box = el('div', 'banner banner--caution', '', { role: 'note' });
   const body = el('div');
-  body.append(el('span', 'banner__title', t(`title.banner.${key}.title`)), t(`title.banner.${key}.text`, params));
+  body.append(el('span', 'banner__title', t(`title.banner.${key}.title`)), t(`title.banner.${key}.${text}`, params));
   box.append(icon('info'), body);
   return box;
 }
 
-function notices(verdict) {
+// What is uncertain about the sources, for the single-service card and the "All services" one.
+function notices(verdict, { all = false } = {}) {
   const boxes = [];
   for (const note of verdict.perSourceNotes) {
     if (note.status === 'unavailable') continue;
     const source = sourceName(note.source);
     if (note.status === 'notFound') boxes.push(banner('notRecognized', { source }));
-    if (note.coverage === 'unknown') boxes.push(banner('coverageUnknown', { source }));
+    if (note.coverage === 'unknown') boxes.push(banner('coverageUnknown', { source }, all ? 'allText' : 'text'));
     if (note.coverage === 'stale' && note.status !== 'notFound') {
       boxes.push(banner('coverageStale', { source, date: formatDate(new Date(note.coverageFetchedAt)) }));
     }
@@ -121,6 +125,11 @@ function homeRow(verdict) {
   status.append(icon(homeIcons[home.kind], 'sm'), t(`title.home.${home.kind}`, { service }));
   line.append(where, status);
   return line;
+}
+
+function sourceNotes(verdict, options) {
+  const uncovered = verdict.home?.saNotCovered ? [el('p', 'muted', t('title.home.saNotCovered'))] : [];
+  return [...uncovered, ...notices(verdict, options)];
 }
 
 function verdictCard(verdict, handlers, title, reconciled) {
@@ -177,8 +186,7 @@ function verdictCard(verdict, handlers, title, reconciled) {
     card.append(el('h2', 'verdict__headline', headline, { id }), el('p', 'verdict__detail', detailLine(verdict)));
     if (verdict.kind === 'notFound') body.append(el('p', 'muted', t('verdict.limit', { service: verdict.service })));
   }
-  if (verdict.home?.saNotCovered) body.append(el('p', 'muted', t('title.home.saNotCovered')));
-  body.append(...notices(verdict));
+  body.append(...sourceNotes(verdict));
   if (body.childElementCount > 0) card.append(body);
   return card;
 }
@@ -316,7 +324,7 @@ function coveredCountries(reconciled) {
   return details;
 }
 
-function dataNote(title, reconciled, verdict) {
+function dataNote(title, reconciled, verdict, { all = false } = {}) {
   const note = el('div', 'data-note');
   note.append(el('p', '', t('title.sources.heading')));
   const lines = el('ul', 'prose');
@@ -333,7 +341,7 @@ function dataNote(title, reconciled, verdict) {
   const links = el('div', 'data-note__links');
   if (title.ref) links.append(externalLink(tmdbLink(title, reconciled, verdict), t('title.link.tmdb'), 'link'));
   const direct = serviceLink(reconciled, verdict);
-  if (direct) links.append(externalLink(direct, t('title.link.service', { service: verdict.service }), 'link'));
+  if (direct && !all) links.append(externalLink(direct, t('title.link.service', { service: verdict.service }), 'link'));
   if (links.childElementCount > 0) note.append(links);
   const covered = coveredCountries(reconciled);
   if (covered) note.append(covered);
@@ -349,8 +357,10 @@ const controllers = new WeakMap();
  * @param {{status: 'details'|'loading'|'missing'|'result', title: import('../api/sources.js').Title,
  *   verdict?: ReturnType<typeof import('../core/verdict.js').computeVerdict>,
  *   reconciled?: ReturnType<typeof import('../core/reconcile.js').reconcile>,
- *   imageConfiguration?: object|null}} state
- * @param {{onRetry?: () => void, onCheckKeys?: () => void}} [handlers]
+ *   imageConfiguration?: object|null,
+ *   services?: {options: {key: string, name: string}[], selected: string,
+ *     all?: {reconciledAll: Map<string, object>, offers: object[], home: string|null}}}} state
+ * @param {{onRetry?: () => void, onCheckKeys?: () => void, onServiceChange?: (key: string) => void}} [handlers]
  */
 export function renderTitle(container, state, handlers = {}) {
   let parts = controllers.get(container);
@@ -367,8 +377,12 @@ export function renderTitle(container, state, handlers = {}) {
     parts = { root, aside, live, rest };
     controllers.set(container, parts);
   }
-  const { title, status, verdict, reconciled, imageConfiguration = null } = state;
-  parts.aside.replaceChildren(header(title, { isSeries: status === 'result' && verdict.isSeries, configuration: imageConfiguration }));
+  const { title, status, verdict, reconciled, imageConfiguration = null, services } = state;
+  // No picker while loading, and none when the sources failed: there is nothing to choose between.
+  const picker = status === 'result' && verdict.kind !== 'error' && services
+    ? servicePicker({ options: services.options, selected: services.selected, onChange: handlers.onServiceChange })
+    : null;
+  parts.aside.replaceChildren(header(title, { isSeries: status === 'result' && verdict.isSeries, configuration: imageConfiguration, picker }));
   if (status === 'details' || status === 'loading') {
     const [card, skeleton] = loadingCard(t(status === 'details' ? 'title.direct.loading' : 'title.loading'));
     parts.live.replaceChildren(card);
@@ -380,13 +394,16 @@ export function renderTitle(container, state, handlers = {}) {
     parts.rest.replaceChildren();
     return parts;
   }
-  parts.live.replaceChildren(verdictCard(verdict, handlers, title, reconciled));
+  const all = verdict.kind !== 'error' && services?.all
+    ? allServicesView({ ...services.all, kind: verdict.kind, coveredCountries: reconciled.coveredCountries, notes: sourceNotes(verdict, { all: true }) })
+    : null;
+  parts.live.replaceChildren(all ? all.card : verdictCard(verdict, handlers, title, reconciled));
   if (verdict.kind === 'error') {
     parts.rest.replaceChildren();
     return parts;
   }
   const content = el('div');
-  content.append(groups(reconciled, verdict), dataNote(title, reconciled, verdict));
+  content.append(...(all ? [all.groups].filter(Boolean) : [groups(reconciled, verdict)]), dataNote(title, reconciled, verdict, { all: Boolean(all) }));
   parts.rest.replaceChildren(...content.childNodes);
   return parts;
 }
