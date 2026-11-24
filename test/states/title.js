@@ -142,6 +142,71 @@ function checkBadges(container) {
   return problems;
 }
 
+
+// Languages: one country per case, all from the second source.
+const track = (kind, language, closedCaptions = false, region = null) => ({ kind, language, region, closedCaptions });
+const withLanguages = (country, languages) => ({
+  source: 'sa', country, serviceKey: 'netflix', serviceName: 'Netflix', serviceLogoPath: null, offerType: 'subscription', link: null,
+  quality: null, expiresOn: null, languages,
+});
+const tmdbOffer = (country) => ({ ...withLanguages(country, []), source: 'tmdb' });
+const dated = (source, offers) => ({
+  source, status: 'offers', fetchedAt: source === 'tmdb' ? '2026-11-21T12:00:00Z' : '2026-11-22T12:00:00Z', coveredCountries: null, offers, error: null,
+});
+const manySubtitles = ['eng', 'fra', 'deu', 'spa', 'ita', 'por', 'jpn', 'kor', 'zho', 'tha', 'ind', 'nld'];
+const languagesInput = {
+  coverage: { tmdb: { status: 'fresh', countries: ['jp', 'ca', 'de', 'fr', 'us', 'br'] }, sa: { status: 'fresh', countries: ['jp', 'ca', 'de', 'fr', 'br'] } },
+  snapshots: [
+    dated('tmdb', ['jp', 'ca', 'de', 'fr', 'us', 'br'].map(tmdbOffer)),
+    dated('sa', [
+      withLanguages('jp', [track('audio', 'jpn'), track('audio', 'eng'), track('audio', 'fra'),
+        ...manySubtitles.flatMap((code) => [track('subtitle', code)]), track('subtitle', 'jpn', true), track('subtitle', 'eng', true)]),
+      withLanguages('ca', [track('subtitle', 'fra'), track('subtitle', 'eng')]),
+      withLanguages('de', []),
+      withLanguages('fr', [track('audio', 'fra')]),
+      withLanguages('br', [track('audio', 'por', false, 'BR')]),
+    ]),
+  ],
+};
+// Eight countries, the first with twelve subtitles: the "Show more" cutoff must only count country rows.
+const manyCountries = (() => {
+  const codes = ['au', 'at', 'be', 'br', 'ca', 'de', 'fr', 'jp'];
+  return {
+    coverage: { tmdb: { status: 'fresh', countries: codes }, sa: { status: 'fresh', countries: codes } },
+    snapshots: [
+      dated('tmdb', codes.map(tmdbOffer)),
+      dated('sa', codes.map((code, index) => withLanguages(code, index === 0 ? manySubtitles.map((language) => track('subtitle', language)) : [track('audio', 'eng')]))),
+    ],
+  };
+})();
+// The second source answers with no offer and its fresh list leaves out the United States.
+const uncoveredInput = {
+  coverage: { tmdb: { status: 'fresh', countries: ['us', 'fr'] }, sa: { status: 'fresh', countries: ['fr'] } },
+  snapshots: [
+    dated('tmdb', ['us', 'fr'].map(tmdbOffer)),
+    { source: 'sa', status: 'empty', fetchedAt: '2026-11-22T12:00:00Z', coveredCountries: null, offers: [], error: null },
+  ],
+};
+const rowOf = (container, name) => [...container.querySelectorAll('.country')].find((node) => node.querySelector('.country__name')?.firstChild.textContent === name);
+
+function openLanguages(container, name) {
+  const row = rowOf(container, name);
+  if (!row) return { problems: [`${name} is missing`] };
+  const toggle = row.querySelector('.country__toggle');
+  const panel = row.querySelector('.langs');
+  const problems = [];
+  if (toggle.getAttribute('aria-expanded') !== 'false' || !panel.hidden) problems.push(`${name} is not collapsed at first`);
+  if (toggle.getAttribute('aria-controls') !== panel.id) problems.push(`${name}: the toggle does not control its panel`);
+  toggle.click();
+  if (toggle.getAttribute('aria-expanded') !== 'true' || panel.hidden) problems.push(`${name} does not open`);
+  return { problems, toggle, panel };
+}
+
+const closeLanguages = ({ toggle, panel }, name) => {
+  toggle.click();
+  return toggle.getAttribute('aria-expanded') === 'false' && panel.hidden ? [] : [`${name} does not close`];
+};
+
 const scenarios = [
   scenario('Title · loading', { status: 'loading', title: movie }, {
     skipContent: true,
@@ -238,6 +303,94 @@ const scenarios = [
     verify: (container) => /Whole series, not per season/.test(text(container, '.title-head__meta')) ? [] : ['the series scope is not stated'],
   }),
   scenario('Title · long title', result(wide, {}, longTitle)),
+  scenario('Title · languages, complete and about ten subtitles (overflow)', result(languagesInput), {
+    verify(container) {
+      const opened = openLanguages(container, 'Japan');
+      const problems = [...opened.problems];
+      const lists = [...opened.panel.querySelectorAll('dt')].map((node) => node.textContent);
+      if (lists.join() !== 'Audio,Subtitles') problems.push('the Audio and Subtitles lists are missing');
+      const audio = [...opened.panel.querySelectorAll('.langs__list > div:nth-child(1) li')].map((node) => node.textContent);
+      if (audio.join() !== 'English,French,Japanese') problems.push(`audio languages are wrong: ${audio}`);
+      const subtitles = [...opened.panel.querySelectorAll('.langs__list > div:nth-child(2) li')].map((node) => node.textContent);
+      if (subtitles.length !== 14 || !subtitles.includes('Japanese (SDH)') || subtitles.indexOf('Japanese') + 1 !== subtitles.indexOf('Japanese (SDH)')) problems.push('subtitles or their SDH variants are wrong');
+      if (!/deaf and hard of hearing/.test(opened.panel.textContent)) problems.push('the SDH note is missing');
+      const brazil = openLanguages(container, 'Brazil');
+      if (!/Brazilian Portuguese/.test(brazil.panel?.textContent ?? '')) problems.push('the regional variant is not named');
+      problems.push(...closeLanguages(brazil, 'Brazil'));
+      // Left open for the screenshots: the longest list is the one that must not overflow.
+      return problems;
+    },
+  }),
+  scenario('Title · languages, subtitles only', result(languagesInput), {
+    verify(container) {
+      const opened = openLanguages(container, 'Canada');
+      const text = opened.panel?.textContent ?? '';
+      const problems = [...opened.problems];
+      if (!/Audio\s*None listed/.test(text) || !/FrenchEnglish|English.*French/.test(text)) problems.push('subtitles without audio are not shown');
+      if (/deaf and hard/.test(text)) problems.push('an SDH note shows without SDH subtitles');
+      problems.push(...closeLanguages(opened, 'Canada'));
+      return problems;
+    },
+  }),
+  scenario('Title · languages missing', result(languagesInput), {
+    verify(container) {
+      const opened = openLanguages(container, 'Germany');
+      const problems = [...opened.problems];
+      if (!/Languages not provided by the source/.test(opened.panel?.textContent ?? '')) problems.push('the missing-languages note is absent');
+      return problems;
+    },
+  }),
+  scenario('Title · languages, country outside second-source coverage', result(languagesInput), {
+    verify(container) {
+      const opened = openLanguages(container, 'United States');
+      const problems = [...opened.problems];
+      if (!/Second source: country not covered/.test(opened.panel?.textContent ?? '')) problems.push('the uncovered-country note is absent');
+      if (opened.panel?.querySelector('dl')) problems.push('languages are shown for an uncovered country');
+      return problems;
+    },
+  }),
+  scenario('Title · languages, show fewer keeps the language entries', result(manyCountries), {
+    verify(container) {
+      const problems = [];
+      const opened = openLanguages(container, 'Australia');
+      problems.push(...opened.problems);
+      const entries = () => container.querySelectorAll('.langs li:not([hidden])').length;
+      const rows = () => [...more.closest('.group').querySelectorAll('.countries > li')].filter((node) => !node.hidden).length;
+      const more = container.querySelector('.more');
+      const before = entries();
+      more.click();
+      if (rows() !== 8) problems.push(`expected 8 country rows once expanded, saw ${rows()}`);
+      more.click();
+      if (rows() !== 6) problems.push(`expected 6 country rows once collapsed, saw ${rows()}`);
+      if (entries() !== before) problems.push(`language entries changed from ${before} to ${entries()} after show more and show fewer`);
+      if (opened.panel.hidden) problems.push('the open language panel closed');
+      return problems;
+    },
+  }),
+  scenario('Title · languages, known uncovered country with an empty second-source answer', result(uncoveredInput), {
+    verify(container) {
+      const opened = openLanguages(container, 'United States');
+      const note = opened.panel?.textContent ?? '';
+      return [...opened.problems, ...(/Second source: country not covered/.test(note) ? [] : [`wrong note: ${note}`])];
+    },
+  }),
+  scenario('Title · languages, keyboard', result(languagesInput), {
+    verify(container) {
+      const toggle = rowOf(container, 'France')?.querySelector('button');
+      if (!toggle || toggle.localName !== 'button') return ['the country toggle is not a native button'];
+      if (toggle.tabIndex < 0) return ['the toggle is not focusable'];
+      toggle.focus();
+      // A native button turns Enter and Space into a click; the click is what opens and closes the panel.
+      const problems = [];
+      if (document.activeElement !== toggle) problems.push('the toggle does not take the focus');
+      const panel = document.getElementById(toggle.getAttribute('aria-controls'));
+      toggle.click();
+      if (toggle.getAttribute('aria-expanded') !== 'true' || panel.hidden) problems.push('activation does not open the panel');
+      toggle.click();
+      if (toggle.getAttribute('aria-expanded') !== 'false' || !panel.hidden) problems.push('a second activation does not close the panel');
+      return problems;
+    },
+  }),
   scenario('Title · error, keys refused', { status: 'result', title: movie, ...compute(failing(disagreement, 'auth')) }, {
     handlersLog: true,
     skipContent: true,

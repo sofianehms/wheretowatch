@@ -631,6 +631,61 @@ const scenarios = [
     },
   },
   {
+    name: 'Search · choosing a suggestion opens the title page with its language disclosure',
+    async render(container) {
+      const offer = (source, languages) => ({
+        source, country: 'fr', serviceKey: 'netflix', serviceName: 'Netflix', serviceLogoPath: null, offerType: 'subscription', link: null,
+        quality: null, expiresOn: null, languages,
+      });
+      const snapshot = (source, offers) => ({ source, status: 'offers', fetchedAt: '2026-11-22T12:00:00Z', coveredCountries: null, offers, error: null });
+      const sources = {
+        async searchTitles(query) {
+          const [name, id] = query === 'second' ? ['Second Tide', 12] : ['Harbour Lights', 11];
+          return { titles: [{ mediaType: 'movie', tmdbId: id, imdbId: null, title: name, year: 2023, posterPath: null, ref: `movie/${id}` }], error: null };
+        },
+        async loadAvailability() {
+          return {
+            snapshots: [snapshot('tmdb', [offer('tmdb', [])]), snapshot('sa', [offer('sa', [{ kind: 'audio', language: 'fra', region: null, closedCaptions: false }])])],
+            coverage: { tmdb: { status: 'fresh', countries: ['fr'] }, sa: { status: 'fresh', countries: ['fr'] } },
+          };
+        },
+      };
+      mountApp(container, { stored: { 'wtw.key.tmdb': sampleKey }, sources, launchQuery: 'harbour' });
+      await settle();
+      container.querySelector('#search [role="option"]').click();
+      for (let wait = 0; wait < 50 && !container.querySelector('#title .country__toggle'); wait += 1) await new Promise((resolve) => setTimeout(resolve, 20));
+    },
+    async check(container) {
+      const problems = [];
+      const wait = async (ready) => {
+        for (let tries = 0; tries < 50 && !ready(); tries += 1) await new Promise((resolve) => setTimeout(resolve, 20));
+      };
+      const openRow = (label) => {
+        if (!container.querySelector('#title .verdict')) problems.push(`${label}: the title page shows no verdict`);
+        const toggle = container.querySelector('#title .country__toggle');
+        if (!toggle) { problems.push(`${label}: the country row is missing`); return; }
+        toggle.click();
+        const panel = container.querySelector('#title .langs');
+        if (toggle.getAttribute('aria-expanded') !== 'true' || !panel || panel.closest('[hidden]') || !panel.getClientRects().length) {
+          problems.push(`${label}: the language panel is not visible after opening the row`);
+        } else if (!/French/.test(panel.textContent)) problems.push(`${label}: the audio language is not shown`);
+      };
+      openRow('first title');
+      const input = container.querySelector('#search input');
+      input.value = 'second';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      if (container.querySelector('#title').childElementCount !== 0) problems.push('typing a new query keeps the old title page');
+      await wait(() => /Second Tide/.test(container.querySelector('#search [role="option"]')?.textContent ?? ''));
+      const option = container.querySelector('#search [role="option"]');
+      if (!option || !/Second Tide/.test(option.textContent)) return [...problems, 'the second suggestion is not listed'];
+      option.click();
+      await wait(() => container.querySelector('#title .country__toggle'));
+      if (!/Second Tide/.test(container.querySelector('#title').textContent)) problems.push('the second title is not rendered');
+      openRow('second title');
+      return problems;
+    },
+  },
+  {
     name: 'Launch · without a key the home screen waits and the search starts once the key is saved',
     async render(container) {
       const calls = [];

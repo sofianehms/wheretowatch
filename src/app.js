@@ -22,6 +22,7 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
   const settingsSlot = root.querySelector('#settings');
 
   const searchSlot = root.querySelector('#search');
+  const titleSlot = root.querySelector('#title') ?? searchView.appendChild(Object.assign((root.ownerDocument ?? root).createElement('div'), { id: 'title' }));
 
   let searchState = { status: 'idle' };
   let imageConfiguration = null;
@@ -37,6 +38,24 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
     input.dataset.focusTarget = '';
   }
 
+  // The title page needs the network: its code and styles load on the first choice, outside the offline shell.
+  let titlePage = null;
+  let pendingTitle = null;
+  const clearTitle = () => {
+    pendingTitle = null;
+    titlePage?.clear();
+    if (!titlePage) titleSlot.replaceChildren();
+  };
+  function showTitle(title) {
+    pendingTitle = title;
+    import('./title-page.js').then(({ createTitlePage }) => {
+      titlePage ??= createTitlePage({
+        app, slot: titleSlot, root, imageConfiguration: () => imageConfiguration, onCheckKeys: () => openSettings(),
+      });
+      if (pendingTitle === title) titlePage.show(title);
+    }, () => {});
+  }
+
   const typeahead = createTypeahead({
     search: (query, { signal }) => (app.sources?.searchTitles ?? noSearch)(query, { signal }),
     onState(state) {
@@ -50,7 +69,8 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
   });
 
   const handlers = {
-    onInput: (value) => typeahead.input(value),
+    onInput: (value) => { clearTitle(); typeahead.input(value); },
+    onChoose: showTitle,
     onSubmit: (value) => typeahead.submit(value),
     onRetry: (value) => typeahead.submit(value),
     onCancel: () => typeahead.cancel(),
@@ -61,6 +81,7 @@ export function startApp(app, root = document, { launchQuery = null } = {}) {
   const search = {
     // Empties the field and the suggestions.
     reset() {
+      clearTitle();
       typeahead.cancel();
       draw({ status: 'idle', value: '' });
     },
