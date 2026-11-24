@@ -24,7 +24,7 @@ function readCoverage(entry) {
   return new Set(entry.countries.map(country).filter(Boolean));
 }
 
-function collect({ snapshots, coverage, serviceMap }) {
+function collect({ snapshots, coverage, serviceMap, aliases }) {
   const snapshotsBySource = new Map(snapshots.map((snapshot) => [snapshot.source, snapshot]));
   const coveredCountries = new Set();
   const fetchedAt = { tmdb: null, sa: null };
@@ -46,7 +46,9 @@ function collect({ snapshots, coverage, serviceMap }) {
     for (const offer of snapshot.offers) {
       const linkCountry = country(offer.country);
       if (id === 'tmdb' && offer.link && linkCountry && !tmdbLinks.has(linkCountry)) tmdbLinks.set(linkCountry, offer.link);
-      const { key, name, id: serviceId } = offerService(id, offer, serviceMap);
+      const identity = offerService(id, offer, serviceMap);
+      const { name, id: serviceId } = identity;
+      const key = aliases?.get(identity.key) ?? identity.key;
       if (!services.has(key)) {
         services.set(key, {
           service: { key, name, sourceIds: {} },
@@ -113,15 +115,16 @@ function summarize(entry, { coveredCountries, fetchedAt, sources, tmdbLinks }) {
  * Each row represents an available country. The populated offer arrays identify
  * which sources reported the service. Service metadata is retained even when
  * coverage is unknown and the result has no country rows.
- * @param {{snapshots: import('../api/sources.js').SourceSnapshot[], coverage: Object<string, {status: 'fresh'|'stale'|'unknown', countries?: string[], fetchedAt?: string}>, serviceKey: string, serviceMap?: object}} options
+ * `aliases` (optional Map) folds a source-specific service key into another one: the same service named alike by both sources.
+ * @param {{aliases?: Map<string, string>, snapshots: import('../api/sources.js').SourceSnapshot[], coverage: Object<string, {status: 'fresh'|'stale'|'unknown', countries?: string[], fetchedAt?: string}>, serviceKey: string, serviceMap?: object}} options
  */
-export function reconcile({ snapshots, coverage, serviceKey, serviceMap }) {
-  const data = collect({ snapshots, coverage, serviceMap });
+export function reconcile({ snapshots, coverage, serviceKey, serviceMap, aliases }) {
+  const data = collect({ snapshots, coverage, serviceMap, aliases });
   return summarize(data.services.get(serviceKey), data);
 }
 
 /** Return a Map from reported service keys to their reconciliation results. */
-export function reconcileAll({ snapshots, coverage, serviceMap }) {
-  const data = collect({ snapshots, coverage, serviceMap });
+export function reconcileAll({ snapshots, coverage, serviceMap, aliases }) {
+  const data = collect({ snapshots, coverage, serviceMap, aliases });
   return new Map([...data.services].map(([key, entry]) => [key, summarize(entry, data)]));
 }

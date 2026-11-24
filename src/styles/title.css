@@ -8,7 +8,7 @@
   padding: var(--space-4) 0;
 }
 .title-head > .poster { flex: none; }
-.title-head__info { flex: 1 1 var(--title-basis); min-width: 0; display: grid; gap: var(--space-1); }
+.title-head__info { flex: 1 1 var(--title-basis); min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
 .title-head::before { /* hero fade: the streaming-app backdrop evoked with the poster tones only */
   content: ""; position: absolute; z-index: -1; inset: 0 calc(-1 * var(--space-4));
   background:
@@ -20,11 +20,11 @@
   letter-spacing: var(--tracking-tight); color: var(--color-text-strong); overflow-wrap: anywhere; }
 .title-head__meta { color: var(--color-text-muted); font-size: var(--text-sm); }
 .title-head__meta span + span::before { content: "\00B7"; margin: 0 var(--space-2); }
-/* Service picker: visible label beside a native select, one 44px row. */
-.service-pick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-1); }
+/* Service picker: visible label beside a native select, one 44px row; a long service name never widens the column. */
+.service-pick { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-1); }
 .service-pick label { font-size: var(--text-sm); color: var(--color-text-muted); }
-.select-wrap { position: relative; display: inline-block; max-width: 100%; }
-.select { max-width: 100%; }
+.select-wrap { position: relative; display: inline-block; max-width: 100%; min-width: 0; }
+.select { max-width: 100%; text-overflow: ellipsis; }
 .select-wrap--block { display: block; }
 .select-wrap--block .select { width: 100%; }
 .select-wrap > .icon { position: absolute; right: var(--space-3); top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--color-text-muted); }

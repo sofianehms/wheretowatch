@@ -23,7 +23,7 @@ function homeVerdict(code, available, reconciled, snapshots, kind) {
 }
 
 /** Compute a service verdict from reconcile() and the same normalized snapshots. */
-export function computeVerdict({ reconciled, snapshots, serviceKey, serviceMap, homeCountry, mediaType }) {
+export function computeVerdict({ reconciled, snapshots, serviceKey, serviceMap, aliases, homeCountry, mediaType }) {
   const tmdbError = snapshots.some(({ source, status, error }) =>
     source === 'tmdb' && status === 'unavailable' && ['auth', 'network', 'server', 'timeout'].includes(error?.type));
   const responses = tmdbError ? [] : snapshots.filter(responds);
@@ -42,7 +42,8 @@ export function computeVerdict({ reconciled, snapshots, serviceKey, serviceMap, 
     if (reconciled.coverage[snapshot.source].status !== 'unknown') continue;
     for (const offer of snapshot.offers) {
       const code = country(offer.country);
-      if (code && offerService(snapshot.source, offer, serviceMap).key === serviceKey) available.add(code);
+      const identity = offerService(snapshot.source, offer, serviceMap).key;
+      if (code && (aliases?.get(identity) ?? identity) === serviceKey) available.add(code);
     }
   }
   const kind = available.size > 0 ? 'available'

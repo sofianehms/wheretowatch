@@ -56,4 +56,13 @@ export default {
   'link.tmdb': 'View on TMDB',
   'link.service': 'Open on {service}',
   'covered.summary': '{countries}',
+  'service.label': 'Service',
+  'service.all': 'All services',
+  'service.service': '{count} service',
+  'service.services': '{count} services',
+  'service.ways': '{count} ways to watch in {country}',
+  'service.ways.one': '{count} way to watch in {country}',
+  'service.none': 'No offer found in {country}',
+  'service.yours': 'Your country',
+  'service.noCountry': 'Choose your country in Settings to see where to watch at home.',
 };
