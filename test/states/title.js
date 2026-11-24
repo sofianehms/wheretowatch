@@ -41,6 +41,18 @@ const wide = (() => {
   };
 })();
 
+// Only TMDB answers, with a rental on another service: the watch-provider page still comes from its response.
+const tmdbOnlyRental = {
+  coverage: { tmdb: { status: 'fresh', countries: ['fr', 'us'] } },
+  snapshots: [{
+    source: 'tmdb', status: 'offers', fetchedAt: '2026-11-21T12:00:00Z', coveredCountries: null, error: null,
+    offers: [{
+      source: 'tmdb', country: 'fr', serviceKey: 'tmdb:2', serviceName: 'Apple TV', serviceId: 2, serviceLogoPath: null, offerType: 'rent',
+      link: 'https://www.themoviedb.org/movie/11/watch?locale=FR', quality: null, expiresOn: null, languages: [],
+    }],
+  }],
+};
+
 function compute(input, { serviceKey = 'netflix', homeCountry = 'FR', mediaType = 'movie' } = {}) {
   const reconciled = reconcile({ ...input, serviceKey });
   const verdict = computeVerdict({ reconciled, snapshots: input.snapshots, serviceKey, homeCountry, mediaType });
@@ -304,6 +316,17 @@ const scenarios = [
       const problems = [];
       if (!/Coverage of a source unknown/.test(text(container, '.banner'))) problems.push('the unknown coverage notice is missing');
       if (countPattern.test(text(container, '.verdict__headline'))) problems.push('a country count is shown');
+      return problems;
+    },
+  }),
+  scenario('Title · TMDB only, another service rents it', result(tmdbOnlyRental), {
+    verify(container) {
+      const problems = [];
+      const tmdbWatch = 'https://www.themoviedb.org/movie/11/watch?locale=FR';
+      const link = [...container.querySelectorAll('.data-note a')].find((node) => node.textContent.includes('TMDB'));
+      if (link?.getAttribute('href') !== tmdbWatch) problems.push(`the TMDB link goes to ${link?.getAttribute('href') ?? 'nowhere'}, not ${tmdbWatch}`);
+      if (!text(container, '.data-note').includes('Availability data: JustWatch')) problems.push('the JustWatch notice is missing');
+      if (container.querySelector('.data-note a[href="https://www.movieofthenight.com/about/api"]')) problems.push('the Movie of the Night notice is shown without its data');
       return problems;
     },
   }),

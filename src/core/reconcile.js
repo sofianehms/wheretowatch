@@ -30,6 +30,8 @@ function collect({ snapshots, coverage, serviceMap }) {
   const fetchedAt = { tmdb: null, sa: null };
   const sources = {};
   const services = new Map();
+  // TMDB's watch-provider page is per country, whatever the service: kept before offers are split by service.
+  const tmdbLinks = new Map();
 
   for (const id of sourceIds) {
     const snapshot = snapshotsBySource.get(id);
@@ -42,6 +44,8 @@ function collect({ snapshots, coverage, serviceMap }) {
     for (const code of countries ?? []) coveredCountries.add(code);
 
     for (const offer of snapshot.offers) {
+      const linkCountry = country(offer.country);
+      if (id === 'tmdb' && offer.link && linkCountry && !tmdbLinks.has(linkCountry)) tmdbLinks.set(linkCountry, offer.link);
       const { key, name, id: serviceId } = offerService(id, offer, serviceMap);
       if (!services.has(key)) {
         services.set(key, {
@@ -60,7 +64,7 @@ function collect({ snapshots, coverage, serviceMap }) {
     }
   }
 
-  return { coveredCountries, fetchedAt, sources, services };
+  return { coveredCountries, fetchedAt, sources, services, tmdbLinks };
 }
 
 function classify(code, offers, sources, sourceIds) {
@@ -77,7 +81,7 @@ function types(offers) {
   return [...new Set(offers.map(({ offerType }) => offerType))];
 }
 
-function summarize(entry, { coveredCountries, fetchedAt, sources }) {
+function summarize(entry, { coveredCountries, fetchedAt, sources, tmdbLinks }) {
   let confirmedCount = 0;
   const countries = [];
   for (const [code, offers] of entry?.byCountry ?? []) {
@@ -99,7 +103,7 @@ function summarize(entry, { coveredCountries, fetchedAt, sources }) {
       fetchedAt: source.coverage?.fetchedAt ?? null,
     }];
   }));
-  return { service: entry?.service ?? null, countries, coveredCountries: new Set(coveredCountries), confirmedCount, coverage };
+  return { service: entry?.service ?? null, countries, coveredCountries: new Set(coveredCountries), confirmedCount, coverage, tmdbLinks: new Map(tmdbLinks) };
 }
 
 /**

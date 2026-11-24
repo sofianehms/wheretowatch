@@ -207,3 +207,16 @@ test('only a verified map entry joins the two source identifiers, including cach
   assert.equal(result.countries[0].offers.sa.length, 1);
   assert.deepEqual(result, reconcile({ ...cached, serviceMap, serviceKey: syntheticKey }));
 });
+
+test('the TMDB watch-provider link is kept per country even when the service has no TMDB offer', () => {
+  const offer = {
+    source: 'tmdb', country: 'fr', serviceKey: 'tmdb:2', serviceName: 'Apple TV', serviceId: 2, serviceLogoPath: null, offerType: 'rent',
+    link: 'https://www.themoviedb.org/movie/11/watch?locale=FR', quality: null, expiresOn: null, languages: [],
+  };
+  const result = netflix({
+    coverage: { tmdb: { status: 'fresh', countries: ['fr'] } },
+    snapshots: [{ source: 'tmdb', status: 'offers', fetchedAt: null, coveredCountries: null, error: null, offers: [offer] }],
+  });
+  assert.equal(result.countries.length, 0);
+  assert.equal(result.tmdbLinks.get('fr'), 'https://www.themoviedb.org/movie/11/watch?locale=FR');
+});

@@ -285,8 +285,17 @@ function sourceLink(source, reconciled, verdict) {
 
 const serviceLink = (reconciled, verdict) => sourceLink('sa', reconciled, verdict);
 
-// The watch-provider page TMDB supplies with its availability data; the plain title page is the fallback.
-const tmdbLink = (title, reconciled, verdict) => sourceLink('tmdb', reconciled, verdict) ?? tmdbUrl(title);
+// The watch-provider page TMDB supplies with its availability data, for any service (home country first);
+// the plain title page is the fallback.
+function tmdbLink(title, reconciled, verdict) {
+  const links = reconciled?.tmdbLinks ?? new Map();
+  const home = verdict.home?.country;
+  for (const href of [links.get(home), ...links.values()]) {
+    const safe = href && safeLink(href);
+    if (safe) return safe;
+  }
+  return sourceLink('tmdb', reconciled, verdict) ?? tmdbUrl(title);
+}
 
 function coveredCountries(reconciled) {
   const codes = [...reconciled.coveredCountries];
