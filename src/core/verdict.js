@@ -24,7 +24,9 @@ function homeVerdict(code, available, reconciled, snapshots, kind) {
 
 /** Compute a service verdict from reconcile() and the same normalized snapshots. */
 export function computeVerdict({ reconciled, snapshots, serviceKey, serviceMap, homeCountry, mediaType }) {
-  const responses = snapshots.filter(responds);
+  const tmdbError = snapshots.some(({ source, status, error }) =>
+    source === 'tmdb' && status === 'unavailable' && ['auth', 'network', 'server', 'timeout'].includes(error?.type));
+  const responses = tmdbError ? [] : snapshots.filter(responds);
   const perSourceNotes = snapshots.map(({ source, status, fetchedAt, stale, error }) => {
     const coverage = reconciled.coverage[source];
     return {
@@ -33,7 +35,7 @@ export function computeVerdict({ reconciled, snapshots, serviceKey, serviceMap, 
     };
   });
   const unknownCoverage = perSourceNotes.some((note) => responds(note) && note.coverage === 'unknown');
-  const available = new Set(reconciled.countries.map((row) => row.country));
+  const available = new Set(tmdbError ? [] : reconciled.countries.map((row) => row.country));
   const reportedOffers = responses.filter(({ status }) => status === 'offers');
   // Reconciliation omits unknown-coverage sources. Their positive offers still establish availability.
   for (const snapshot of reportedOffers) {
@@ -45,7 +47,7 @@ export function computeVerdict({ reconciled, snapshots, serviceKey, serviceMap, 
   }
   const kind = available.size > 0 ? 'available'
     : reportedOffers.length > 0 ? 'notFound'
-    : snapshots.length > 0 && snapshots.every(hasTechnicalError) ? 'error'
+    : tmdbError || (snapshots.length > 0 && snapshots.every(hasTechnicalError)) ? 'error'
     : 'insufficient';
   const fetchedAt = responses.reduce((latest, snapshot) =>
     latest === null || Date.parse(snapshot.fetchedAt) > Date.parse(latest) ? snapshot.fetchedAt : latest, null);
@@ -54,7 +56,7 @@ export function computeVerdict({ reconciled, snapshots, serviceKey, serviceMap, 
     kind,
     count: unknownCoverage || kind === 'error' ? null
       : kind === 'available' ? available.size : reconciled.coveredCountries.size,
-    confirmedCount: reconciled.confirmedCount,
+    confirmedCount: kind === 'error' ? 0 : reconciled.confirmedCount,
     sources: responses.map(({ source }) => source),
     fetchedAt,
     stale: responses.some(({ stale }) => stale === true),

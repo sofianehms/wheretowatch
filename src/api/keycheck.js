@@ -18,6 +18,7 @@ async function checkKey(url, headers, { fetchImpl = globalThis.fetch, signal, ti
       headers,
       signal,
       timeoutMs,
+      onResponse: quota && ((headers) => quota.sync?.(headers)),
       fetchImpl(target, options) {
         // Count the attempt when dispatched, even if it fails or times out.
         quota?.record();
@@ -26,6 +27,7 @@ async function checkKey(url, headers, { fetchImpl = globalThis.fetch, signal, ti
     });
     return 'valid';
   } catch (error) {
+    if (error.type === 'quota' || error.type === 'rateLimited') quota?.markExhausted?.();
     switch (error.type) {
       case 'auth': return 'invalid';
       case 'quota': return 'quota';
@@ -46,15 +48,15 @@ export function checkTmdbKey(token, deps = {}) {
 
 /**
  * @param {string} key Streaming Availability API key.
- * @param {KeyCheckDeps & {quota: {canCall: () => boolean, record: () => void}}} deps
+ * @param {KeyCheckDeps & {quota: ReturnType<typeof import('./quota.js').createQuota>}} deps
  * The quota is required. A quota storage failure resolves to 'network'.
  * @returns {Promise<KeyCheckResult>}
  */
 export async function checkSaKey(key, { quota, ...deps }) {
   try {
     if (!quota.canCall()) return 'quota';
+    return await checkKey(saCountries, { 'X-API-Key': key }, deps, quota);
   } catch {
     return 'network';
   }
-  return checkKey(saCountries, { 'X-API-Key': key }, deps, quota);
 }

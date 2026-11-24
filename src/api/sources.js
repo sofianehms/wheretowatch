@@ -42,6 +42,7 @@ import { HttpError } from './http.js';
  * @property {'offers'|'empty'|'notFound'|'unavailable'} status
  * @property {string} fetchedAt ISO 8601 timestamp.
  * @property {boolean} [stale] Whether the snapshot was served from stale cache.
+ * @property {'quota'|'error'} [reason] Reason a stale snapshot was used.
  * @property {number|null} coveredCountries Country count, null when unknown.
  * @property {Offer[]} offers
  * @property {Error|null} error
@@ -121,7 +122,7 @@ export function createSources({
       return collectAvailability(availabilitySources.filter(isEnabled), title, signal);
     },
 
-    /** @returns {Promise<{snapshots: SourceSnapshot[], coverage: Object<string, Coverage>, mode: 'full'|'tmdbOnly'}>} */
+    /** @returns {Promise<{snapshots: SourceSnapshot[], coverage: Object<string, Coverage>, mode: 'full'|'tmdbOnly', reason: 'quota'|'error'|'noKey'|null}>} */
     async loadAvailability(title, { signal } = {}) {
       const selected = availabilitySources.filter(isEnabled);
       const snapshots = await collectAvailability(selected, title, signal);

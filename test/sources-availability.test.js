@@ -85,8 +85,8 @@ test('IMDb disagreement removes SA offers and preserves the not-found response',
   for (const imdbId of ['tt9999999', fakeTitle.imdbId, null]) {
     sa.getAvailability = async () => ({ ...base, status: 'offers', offers: [offer], imdbId });
     const result = await registry.loadAvailability({ ...fakeTitle, imdbId: null });
-    assert.equal(result.mode, 'full');
     const mismatch = imdbId === 'tt9999999';
+    assert.equal(result.mode, mismatch ? 'tmdbOnly' : 'full');
     assert.equal(result.snapshots[1].status, mismatch ? 'notFound' : 'offers');
     assert.deepEqual(result.snapshots[1].offers, mismatch ? [] : [offer]);
   }

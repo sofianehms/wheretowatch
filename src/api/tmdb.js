@@ -1,5 +1,5 @@
 import { createCache, TTL_BY_KIND } from './cache.js';
-import { HttpError, request } from './http.js';
+import { canUseStale, HttpError, request } from './http.js';
 import { country, offerType, serviceKey } from '../core/normalize.js';
 import { getLocale as appLocale } from '../i18n/strings.js';
 import { coverageKeys } from './sources.js';
@@ -85,10 +85,16 @@ export function createTmdbSource({
 
   async function loadTitleData(key, kind, load) {
     const cached = cache.get(key);
-    if (cached) return cached.value;
-    const value = await load();
-    cache.set(key, value, { kind, source });
-    return value;
+    if (cached) return { value: cached.value, stale: false };
+    try {
+      const value = await load();
+      cache.set(key, value, { kind, source });
+      return { value, stale: false };
+    } catch (error) {
+      const last = canUseStale(error) && cache.getStale(key);
+      if (!last) throw error;
+      return { value: last.value, stale: true, fetchedAt: new Date(last.fetchedAt).toISOString() };
+    }
   }
 
   return {
@@ -187,15 +193,16 @@ export function createTmdbSource({
         }),
       ]);
       if (details.status === 'fulfilled') {
-        snapshot.imdbId = details.value.imdbId;
-        snapshot.title = { ...title, ref, imdbId: details.value.imdbId };
+        snapshot.imdbId = details.value.value.imdbId;
+        snapshot.title = { ...title, ref, imdbId: snapshot.imdbId };
       }
       if (signal?.aborted) {
         return { ...snapshot, status: 'unavailable', error: new HttpError('aborted') };
       }
       const failures = [details, providers].filter(({ status }) => status === 'rejected');
       // Technical failures take precedence so a mixed failure can be retried immediately.
-      const technicalFailure = failures.find(({ reason }) => reason?.type !== 'notFound');
+      const technicalFailure = failures.find(({ reason }) => reason?.type === 'auth') ??
+        failures.find(({ reason }) => reason?.type !== 'notFound');
       if (technicalFailure) {
         const { reason } = technicalFailure;
         const error = reason instanceof HttpError ? reason : new HttpError('server');
@@ -204,14 +211,20 @@ export function createTmdbSource({
       if (failures.length) {
         cache.set(missingKey, {
           fetchedAt: snapshot.fetchedAt,
-          details: details.status === 'fulfilled' ? details.value : null,
+          details: details.status === 'fulfilled' ? details.value.value : null,
         }, { kind: 'availability', source });
         return snapshot;
       }
+      const availability = providers.value.value;
+      const stale = details.value.stale || providers.value.stale;
+      const fetchedAt = details.value.stale && details.value.fetchedAt < availability.fetchedAt
+        ? details.value.fetchedAt : availability.fetchedAt;
       return {
         ...snapshot,
-        ...providers.value,
-        status: providers.value.offers.length ? 'offers' : 'empty',
+        ...availability,
+        fetchedAt,
+        status: availability.offers.length ? 'offers' : 'empty',
+        ...(stale && { stale: true, reason: 'error' }),
       };
     },
   };

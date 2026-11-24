@@ -113,7 +113,7 @@ test('caches countries for seven days and uses the quota for both endpoints', as
 test('serves cached results while quota blocks new requests', async () => {
   const { source, calls } = fixture(undefined, 1);
   const first = await source.getAvailability(title);
-  assert.deepEqual(await source.getAvailability(title), first);
+  assert.deepEqual(await source.getAvailability(title), { ...first, stale: true, reason: 'quota' });
   assert.equal((await source.getAvailability(tv)).error.type, 'quota');
   await assert.rejects(source.listCoveredCountries(), { type: 'quota' });
   assert.equal(calls.length, 1);
