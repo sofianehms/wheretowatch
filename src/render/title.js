@@ -6,7 +6,7 @@ import { el, externalLink, icon, uniqueId } from './dom.js';
 
 const TONES = 6;
 // Countries listed before the "Show more" control, per offer type.
-const INITIAL_COUNTRIES = 12;
+const INITIAL_COUNTRIES = 6;
 const OFFER_TYPES = ['subscription', 'free', 'rent', 'buy'];
 const SOURCES = ['tmdb', 'sa'];
 const sourceName = (id) => t(`verdict.source.${id}`);
@@ -67,23 +67,24 @@ const verdictIcons = { available: 'checkCircle', notFound: 'close', insufficient
 const verdictClasses = { available: 'available', notFound: 'absent', insufficient: 'unknown', error: 'error' };
 const homeIcons = { available: 'checkCircle', notFound: 'close', insufficient: 'info' };
 
-function latest(verdict) {
-  return verdict.fetchedAt === null ? null : formatDate(new Date(verdict.fetchedAt));
+// Each source carries its own retrieval date: the newest date of one source never stands for another.
+function sourceDated({ source, fetchedAt }) {
+  return fetchedAt ? t('title.detail.dated', { source: sourceName(source), date: formatDate(new Date(fetchedAt)) }) : sourceName(source);
 }
 
 function detailLine(verdict) {
-  const date = latest(verdict);
+  const responding = verdict.perSourceNotes.filter(({ status }) => status !== 'unavailable');
   // Sources that recognize the title; a source that does not know it is explained in a notice.
-  const known = verdict.perSourceNotes.filter(({ status }) => status === 'offers' || status === 'empty').map(({ source }) => source);
-  const names = (known.length > 0 ? known : verdict.sources).map(sourceName);
+  const known = responding.filter(({ status }) => status === 'offers' || status === 'empty');
+  const shown = known.length > 0 ? known : responding;
   const parts = [];
-  if (verdict.kind === 'available' && verdict.count !== null && names.length === SOURCES.length) {
+  if (verdict.kind === 'available' && verdict.count !== null && known.length === SOURCES.length) {
     parts.push(t('verdict.confirmed', { count: formatNumber(verdict.confirmedCount) }).replace(/\.$/, ''));
   }
-  parts.push(names.length === SOURCES.length
-    ? t('title.detail.and', { first: names[0], second: names[1] })
-    : t('title.detail.only', { source: names[0] }));
-  if (date) parts.push(date);
+  const dated = shown.map(sourceDated);
+  if (dated.length === SOURCES.length) parts.push(t('title.detail.and', { first: dated[0], second: dated[1] }));
+  else if (dated.length === 1) parts.push(t('title.detail.only', { source: dated[0] }));
+  if (verdict.fetchedAt === null) parts.push(t('verdict.noRetrieval').replace(/\.$/, ''));
   return parts.join(' · ');
 }
 
@@ -131,6 +132,7 @@ function verdictCard(verdict, handlers, title) {
     const types = verdict.perSourceNotes.map(({ errorType }) => errorType);
     const needsKeys = types.includes('auth');
     card.append(mark, el('h2', 'verdict__headline', t('title.error.headline'), { id }), el('p', 'verdict__detail', verdictText(verdict, t)));
+    if (verdict.fetchedAt === null) card.append(el('p', 'muted', t('verdict.noRetrieval')));
     const retry = el('button', `btn btn--${needsKeys ? 'secondary' : 'primary'}`, '', { type: 'button' });
     retry.append(icon('refresh', 'sm'), t('title.error.retry'));
     retry.addEventListener('click', () => handlers.onRetry?.());
@@ -149,6 +151,9 @@ function verdictCard(verdict, handlers, title) {
   card.append(mark);
   if (verdict.kind === 'insufficient') {
     card.append(el('h2', 'verdict__headline', t('title.insufficient.headline'), { id }), el('p', 'verdict__detail', t('title.insufficient.detail')));
+    if (verdict.count !== null) {
+      body.append(el('p', 'muted', t('verdict.covered', { countries: countLabel(verdict.count) })));
+    }
     const list = el('ul', 'prose');
     for (const note of verdict.perSourceNotes) {
       if (note.status === 'unavailable') continue;
@@ -306,13 +311,6 @@ function dataNote(title, reconciled, verdict) {
     lines.append(el('li', '', t(entry.stale ? 'verdict.source.stale' : 'verdict.source.retrieved', { source: sourceName(entry.source), date })));
   }
   note.append(lines);
-  if (verdict.sources.includes('sa')) {
-    const credit = el('p');
-    credit.append(t('title.sources.credit'), ' ',
-      el('a', 'link link--quiet', t('title.sources.creditName'), { href: 'https://www.movieofthenight.com/about/api', target: '_blank', rel: 'noopener noreferrer' }), '.');
-    note.append(credit);
-  }
-  note.append(el('p', '', t('title.sources.tmdb')));
   const links = el('div', 'data-note__links');
   if (title.ref) links.append(externalLink(tmdbUrl(title), t('title.link.tmdb'), 'link'));
   const direct = serviceLink(reconciled, verdict);

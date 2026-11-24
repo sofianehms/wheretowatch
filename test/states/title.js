@@ -69,22 +69,43 @@ function checkLive(container) {
   return live.querySelector('.verdict') ? [] : ['the verdict is not inside the polite status region'];
 }
 
-// Each verdict names its source(s), carries a date, and a country count whenever the count is known.
-function checkVerdictContent(container, { count = true } = {}) {
-  const verdict = container.querySelector('.verdict');
-  const full = `${verdict.textContent} ${text(container, '.data-note')}`;
+const dateOf = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const SOURCE_NAMES = { tmdb: 'JustWatch via TMDB', sa: 'Movie of the Night' };
+
+// Each verdict names its source(s), each with its own retrieval date from the fixture, and the exact
+// number of countries whenever the count is known.
+function checkVerdictContent(container, verdict) {
+  const card = container.querySelector('.verdict');
+  const shown = card.textContent;
+  const full = `${shown} ${text(container, '.data-note')}`;
   const problems = [];
-  if (!/JustWatch|Movie of the Night/.test(verdict.textContent)) problems.push('the verdict names no source');
-  if (!datePattern.test(verdict.textContent)) problems.push('the verdict shows no date');
-  if (count && !countPattern.test(text(container, '.verdict__headline'))) problems.push('the verdict shows no number of countries');
-  if (!count && countPattern.test(text(container, '.verdict__headline'))) problems.push('the verdict shows a count despite unknown coverage');
+  const responding = verdict.perSourceNotes.filter(({ status }) => status !== 'unavailable');
+  const known = responding.filter(({ status }) => status === 'offers' || status === 'empty');
+  const named = verdict.kind === 'insufficient' || known.length === 0 ? responding : known;
+  if (named.length === 0) problems.push('the fixture has no responding source');
+  for (const { source, fetchedAt } of named) {
+    const name = SOURCE_NAMES[source];
+    const date = dateOf(fetchedAt);
+    const pair = verdict.kind === 'insufficient'
+      ? [...card.querySelectorAll('li')].some((item) => item.textContent.startsWith(`${name}:`) && item.textContent.includes(date))
+      : shown.includes(`${name}, ${date}`);
+    if (!pair) problems.push(`the verdict does not show ${name} with its date ${date}`);
+  }
+  for (const { source } of verdict.perSourceNotes.filter((note) => !named.includes(note))) {
+    if (verdict.kind !== 'insufficient' && new RegExp(`${SOURCE_NAMES[source]}, \\d`).test(shown)) problems.push(`${SOURCE_NAMES[source]} is dated as a reporting source`);
+  }
+  const counted = verdict.kind === 'insufficient' ? shown : text(container, '.verdict__headline');
+  if (verdict.count !== null) {
+    const exact = new RegExp(`\\b${verdict.count} (?:covered )?countr(?:y|ies)\\b`);
+    if (!exact.test(counted)) problems.push(`the verdict does not show the ${verdict.count} countries`);
+  } else if (countPattern.test(counted)) problems.push('the verdict shows a count despite unknown coverage');
   if (/\b(nowhere|never)\b/i.test(full)) problems.push('forbidden wording');
   return problems;
 }
 
 const iconOf = (node) => node.querySelector('svg path')?.getAttribute('d');
 
-function scenario(name, state, { handlersLog = false, verify = () => [], count = true, skipContent = false } = {}) {
+function scenario(name, state, { handlersLog = false, verify = () => [], expected = {}, skipContent = false } = {}) {
   return {
     name,
     render(container) {
@@ -93,7 +114,11 @@ function scenario(name, state, { handlersLog = false, verify = () => [], count =
     },
     check(container) {
       const problems = [...checkLive(container), ...checkFits(container), ...verify(container)];
-      if (!skipContent) problems.push(...checkVerdictContent(container, { count }));
+      if (!skipContent) {
+        problems.push(...checkVerdictContent(container, state.verdict));
+        // The fixture totals are restated literally, so a wrong computation cannot pass unnoticed.
+        if ('count' in expected && state.verdict.count !== expected.count) problems.push(`expected ${expected.count} countries, computed ${state.verdict.count}`);
+      }
       return problems;
     },
   };
@@ -188,8 +213,7 @@ const scenarios = [
       problems.push(...has(container, '.verdict a[href^="https://www.themoviedb.org/"]', 'the TMDB check link'));
       return problems;
     },
-    count: false,
-    skipContent: true,
+    expected: { count: 2 },
   }),
   scenario('Title · coverage from an old (dated) list', result({
     ...disagreement, snapshots: [disagreement.snapshots[0], { ...disagreement.snapshots[1], stale: true }],
@@ -202,7 +226,7 @@ const scenarios = [
   scenario('Title · coverage of an unknown source', result({
     ...disagreement, coverage: { ...disagreement.coverage, sa: { status: 'unknown' } },
   }), {
-    count: false,
+    expected: { count: null },
     verify(container) {
       const problems = [];
       if (!/Coverage of a source unknown/.test(text(container, '.banner'))) problems.push('the unknown coverage notice is missing');
@@ -224,6 +248,7 @@ const scenarios = [
       buttons[0]?.click();
       buttons[1]?.click();
       if (container.log.join() !== 'keys,retry') problems.push('the error actions do not call their handlers');
+      if (!/No availability data was retrieved/.test(text(container, '.verdict'))) problems.push('the missing retrieval is not explained');
       return problems;
     },
   }),
