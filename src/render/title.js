@@ -2,6 +2,7 @@
 import { posterSrcset } from '../core/images.js';
 import { verdictText } from '../core/verdict.js';
 import { countryName, formatDate, formatNumber, t } from '../i18n/strings.js';
+import { justWatchNotice, nightNotice } from './attribution.js';
 import { el, externalLink, icon, uniqueId } from './dom.js';
 import { languageRow } from './languages.js';
 
@@ -311,6 +312,10 @@ function dataNote(title, reconciled, verdict) {
     lines.append(el('li', '', t(entry.stale ? 'verdict.source.stale' : 'verdict.source.retrieved', { source: sourceName(entry.source), date })));
   }
   note.append(lines);
+  // Each source's contractual notice sits with its data: only for a source that answered.
+  const answered = (id) => verdict.perSourceNotes.some(({ source, status }) => source === id && status !== 'unavailable');
+  if (answered('tmdb')) note.append(justWatchNotice());
+  if (answered('sa')) note.append(nightNotice());
   const links = el('div', 'data-note__links');
   if (title.ref) links.append(externalLink(tmdbUrl(title), t('title.link.tmdb'), 'link'));
   const direct = serviceLink(reconciled, verdict);

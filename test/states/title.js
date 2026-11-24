@@ -99,6 +99,14 @@ function checkVerdictContent(container, verdict) {
     const exact = new RegExp(`\\b${verdict.count} (?:covered )?countr(?:y|ies)\\b`);
     if (!exact.test(counted)) problems.push(`the verdict does not show the ${verdict.count} countries`);
   } else if (countPattern.test(counted)) problems.push('the verdict shows a count despite unknown coverage');
+  // Each answering source carries its contractual notice, and only that source.
+  const noteText = text(container, '.data-note');
+  const night = container.querySelector('.data-note a[href="https://www.movieofthenight.com/about/api"]');
+  for (const [id, shownNotice] of [['tmdb', noteText.includes('Availability data: JustWatch')], ['sa', Boolean(night)]]) {
+    const answered = responding.some(({ source }) => source === id);
+    if (answered !== shownNotice) problems.push(`the ${id} attribution notice is ${shownNotice ? 'shown without' : 'missing for'} its data`);
+  }
+  if (night && !noteText.includes('Streaming availability information is provided by Streaming Availability API by Movie of the Night')) problems.push('the Movie of the Night notice wording differs');
   if (/\b(nowhere|never)\b/i.test(full)) problems.push('forbidden wording');
   return problems;
 }
