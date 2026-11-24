@@ -17,15 +17,30 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
   doc.head?.append(link);
 
   let run = null;
+  // What the page shows, kept so a changed preference redraws without a new request.
+  let shown = null;
+
+  function present() {
+    const { title, snapshots, coverage } = shown;
+    const serviceKey = app.settings.getPref('service') ?? DEFAULT_SERVICE;
+    const reconciled = reconcile({ snapshots, coverage, serviceKey });
+    const homeCountry = app.settings.getPref('country');
+    const verdict = computeVerdict({ reconciled, snapshots, serviceKey, homeCountry, mediaType: title.mediaType });
+    renderTitle(slot, { status: 'result', title, verdict, reconciled, imageConfiguration: imageConfiguration() }, {
+      onRetry: () => show(title), onCheckKeys,
+    });
+  }
 
   function clear() {
     run?.abort();
     run = null;
+    shown = null;
     slot.replaceChildren();
   }
 
   async function show(title) {
     run?.abort();
+    shown = null;
     const current = new AbortController();
     run = current;
     renderTitle(slot, { status: 'loading', title, imageConfiguration: imageConfiguration() }, {});
@@ -42,14 +57,14 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
       };
     }
     if (current.signal.aborted) return;
-    const { snapshots, coverage } = loaded;
-    const serviceKey = DEFAULT_SERVICE;
-    const reconciled = reconcile({ snapshots, coverage, serviceKey });
-    const verdict = computeVerdict({ reconciled, snapshots, serviceKey, homeCountry: null, mediaType: title.mediaType });
-    renderTitle(slot, { status: 'result', title, verdict, reconciled, imageConfiguration: imageConfiguration() }, {
-      onRetry: () => show(title), onCheckKeys,
-    });
+    shown = { title, snapshots: loaded.snapshots, coverage: loaded.coverage };
+    present();
   }
 
-  return { show, clear };
+  /** Recompute the verdict after a preference changed (reference country). */
+  function refresh() {
+    if (shown) present();
+  }
+
+  return { show, clear, refresh };
 }

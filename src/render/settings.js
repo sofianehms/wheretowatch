@@ -244,7 +244,7 @@ export function renderClearDialog({ onCancel, onConfirm }) {
 }
 
 /**
- * Settings screen: the two API keys, how data is kept and the "Clear my data" action.
+ * Settings screen: API keys, reference country (`sources`, `onCountryChange`), theme, data.
  * @param {object} options
  * @param {ReturnType<typeof import('../settings/keys.js').createSettings>} options.settings
  * @param {(provider: 'tmdb'|'sa', value: string, deps: {signal: AbortSignal}) => Promise<string>} options.checkKey
@@ -253,9 +253,9 @@ export function renderClearDialog({ onCancel, onConfirm }) {
  * @param {(provider: 'tmdb'|'sa', outcome: string) => void} [options.onChange] Called after a key is saved,
  *   removed or verified; `outcome` is `saved`, `unverified` or `removed`.
  * @param {() => void} [options.onCleared] Called after all data has been cleared.
- * @returns {HTMLElement} The screen; `pending()` tells whether a key check or save is running; `confirming()` whether the erasure dialog is open; `dispose()` cancels it.
+ * @returns {HTMLElement} The screen, with `pending()`, `confirming()` and `dispose()`.
  */
-export function renderSettings({ settings, checkKey, quotaLimit, durable = true, onChange = () => {}, onCleared = () => {} }) {
+export function renderSettings({ settings, checkKey, quotaLimit, sources, onCountryChange, durable = true, onChange = () => {}, onCleared = () => {} }) {
   const root = el('div', 'settings');
 
   const keysId = uniqueId('settings-keys');
@@ -333,6 +333,8 @@ export function renderSettings({ settings, checkKey, quotaLimit, durable = true,
     el('p', 'field__help', t('settings.theme.help'), { id: helpId }),
     themeNote,
   );
+
+  import('./country.js').then((m) => theme.before(m.renderCountry({ settings, sources, onCountryChange })), () => {});
 
   let scrim = null;
   function closeDialog({ restoreFocus = true } = {}) {
