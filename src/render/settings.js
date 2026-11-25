@@ -1,3 +1,4 @@
+import { clearErrors } from '../api/diagnostics.js';
 import { DEFAULT_QUOTA_CONFIG } from '../api/quota.js';
 import { formatNumber, formatResetDate, t } from '../i18n/strings.js';
 import { applyTheme, THEMES } from '../theme.js';
@@ -281,16 +282,18 @@ export function renderClearDialog({ onCancel, onConfirm }) {
  * @param {(provider: 'tmdb'|'sa', value: string, deps: {signal: AbortSignal}) => Promise<string>} options.checkKey
  * @param {() => number} [options.quotaLimit] Monthly call limit of the optional source.
  * @param {ReturnType<typeof import('../api/quota.js').createQuota>['status']} [options.quotaStatus] Shows the usage counter.
+ * @param {() => {entries: number, bytes: number}} [options.cacheStats] Shows the diagnostics panel.
  * @param {boolean} [options.durable] False when keys last only for this visit.
  * @param {(provider: 'tmdb'|'sa', outcome: string) => void} [options.onChange] After a key is saved, removed or verified.
  * @param {() => void} [options.onCleared] Called after all data has been cleared.
  * @returns {HTMLElement} The screen, with `pending()`, `confirming()`, `dispose()`.
  */
-export function renderSettings({ settings, checkKey, quotaLimit, quotaStatus, sources, onCountryChange, durable = true, onChange = () => {}, onCleared = () => {} }) {
+export function renderSettings({ settings, checkKey, quotaLimit, quotaStatus, cacheStats, sources, onCountryChange, durable = true, onChange = () => {}, onCleared = () => {} }) {
   const root = el('div', 'settings');
   let countrySection;
+  let diagnostics;
   // A key change alters the active sources, hence the countries.
-  const notifyChange = (...args) => (countrySection?.refresh(), onChange(...args));
+  const notifyChange = (...args) => (countrySection?.refresh(), diagnostics?.refresh(), onChange(...args));
 
   const keysId = uniqueId('settings-keys');
   const dataId = uniqueId('settings-data');
@@ -303,6 +306,7 @@ export function renderSettings({ settings, checkKey, quotaLimit, quotaStatus, so
   const markPrimary = () => {
     // A key test spends a call, so the counter follows every field update.
     usage?.refresh();
+    diagnostics?.refresh();
     const first = [tmdb, sa].find((field) => field?.dirty());
     for (const field of [tmdb, sa]) {
       if (field) field.save.className = field === first ? 'btn btn--primary' : 'btn btn--secondary';
@@ -374,6 +378,10 @@ export function renderSettings({ settings, checkKey, quotaLimit, quotaStatus, so
 
   import('./country.js').then((m) => theme.before(countrySection = m.renderCountry({ settings, sources, onCountryChange })), () => {});
 
+  if (cacheStats) {
+    import('./diagnostics.js').then((m) => data.after(diagnostics = m.renderDiagnostics({ quotaStatus, cacheStats })), () => {});
+  }
+
   let scrim = null;
   function closeDialog({ restoreFocus = true } = {}) {
     scrim?.remove();
@@ -385,6 +393,7 @@ export function renderSettings({ settings, checkKey, quotaLimit, quotaStatus, so
       onCancel: () => closeDialog(),
       onConfirm() {
         settings.clearAll();
+        clearErrors();
         unsavedTheme = null;
         tmdb.abort();
         sa.abort();

@@ -207,6 +207,7 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
         onCountryChange: () => titlePage?.refresh(),
         quotaLimit: app.quotaLimit,
         quotaStatus: app.quota?.status,
+        cacheStats: app.cache?.stats,
         durable: app.durable,
         // The first saved key ends the first run: go back to search.
         onChange: () => {

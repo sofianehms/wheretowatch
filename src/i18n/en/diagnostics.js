@@ -1,0 +1,20 @@
+// Strings of the diagnostics panel, loaded with it.
+export default {
+  'title': 'Diagnostics',
+  'help': 'Kept on this device only, never sent anywhere. Keys and address parameters are not recorded.',
+  'quota': 'Monthly calls for language data',
+  'quota.value': '{used} of {limit} used · resets on {date}',
+  'quota.unknown': 'Unavailable',
+  'cache': 'Saved results',
+  'cache.value': 'Entries: {entries} · {size} KB',
+  'errors': 'Recent errors',
+  'errors.empty': 'No errors since the app was opened.',
+  'type.auth': 'Access denied',
+  'type.notFound': 'Not found',
+  'type.rateLimited': 'Too many requests',
+  'type.quota': 'Quota exhausted',
+  'type.network': 'Network failure',
+  'type.offline': 'Offline',
+  'type.timeout': 'Timed out',
+  'type.server': 'Service error',
+};

@@ -1,4 +1,6 @@
 import { createCache } from '../../src/api/cache.js';
+import { clearErrors, recordError } from '../../src/api/diagnostics.js';
+import { checkTmdbKey } from '../../src/api/keycheck.js';
 import { createQuota } from '../../src/api/quota.js';
 import { startApp } from '../../src/app.js';
 import { renderClearDialog, renderSettings } from '../../src/render/settings.js';
@@ -291,7 +293,52 @@ const usageScenarios = [
   usageScenario('blocked', 1000, /1,000 of 1,000 limit reached: languages paused until 1 Dec 2026$/, 'meter meter--danger'),
 ];
 
+// The diagnostics panel is loaded on demand: wait for it, open it and let the toggle event run.
+async function openDiagnostics(root) {
+  for (let turn = 0; turn < 100 && !root.querySelector('.diagnostics'); turn += 1) await new Promise((resolve) => setTimeout(resolve, 20));
+  const details = root.querySelector('.diagnostics');
+  details.querySelector('summary').click();
+  await settle();
+  await settle();
+  return details;
+}
+
+function diagnosticsScenario(name, prepare, expected) {
+  return {
+    name: `Settings · diagnostics ${name}`,
+    async render(container) {
+      clearErrors();
+      const storage = memoryStorage();
+      const cache = createCache({ storage });
+      const quota = createQuota({ storage, now: () => Date.UTC(2026, 10, 23) });
+      const settings = createSettings({ storage, navigatorLike: { language: 'en-GB' }, cache, quota });
+      await prepare({ cache, quota });
+      container.append(renderSettings({ settings, checkKey: async () => 'valid', quotaStatus: quota.status, cacheStats: cache.stats }));
+      container.panel = await openDiagnostics(container);
+      // The buffer is shared by the whole page: leave it empty for the other scenarios.
+      clearErrors();
+    },
+    check(container) {
+      const problems = checkNoOverflow(container);
+      const text = container.panel.textContent;
+      for (const part of expected) if (!text.includes(part)) problems.push(`the panel does not show "${part}"`);
+      if (/dummy-key|api_key|\?/.test(text)) problems.push('the panel shows a key or an address parameter');
+      return problems;
+    },
+  };
+}
+
+const diagnosticsScenarios = [
+  diagnosticsScenario('empty', () => {}, ['0 of 1,000 used · resets on 1 Dec 2026', 'Entries: 0 · 0 KB', 'No errors since the app was opened.']),
+  diagnosticsScenario('with errors', async ({ cache }) => {
+    cache.set('title', { name: 'sample' }, { kind: 'metadata', source: 'tmdb' });
+    await checkTmdbKey('dummy-key', { fetchImpl: async () => new Response('{}', { status: 401 }) });
+    recordError({ type: 'server', url: 'https://api.movieofthenight.com/v4/shows/tt0000000/with-a-rather-long-path-segment?api_key=dummy-key' });
+  }, ['Entries: 1', 'Access denied', 'api.themoviedb.org/3/configuration', 'Service error', 'api.movieofthenight.com/v4/shows/tt0000000']),
+];
+
 const scenarios = [
+  ...diagnosticsScenarios,
   ...usageScenarios,
   countryScenario,
   countryRefreshScenario,
