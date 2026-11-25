@@ -24,7 +24,8 @@ export function nightNotice() {
 
 /**
  * Site footer: TMDB (name as text until the owner places the official logo), its required sentence,
- * and the JustWatch notice with a link to TMDB.
+ * the JustWatch notice with a link to TMDB,
+ * and the link to the "About and privacy" page.
  * @param {HTMLElement} container
  */
 export function renderFooter(container) {
@@ -35,6 +36,7 @@ export function renderFooter(container) {
     el('p', '', t('common.attribution.tmdb')),
     justWatchNotice(),
     externalLink(t('common.attribution.tmdbUrl'), t('common.attribution.viewTmdb'), 'link'),
+    el('a', 'link link--about', t('common.about'), { href: 'about.html' }),
   );
   footer.append(body);
   container.replaceChildren(footer);

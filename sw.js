@@ -1,7 +1,7 @@
 // Minimal offline shell cache. A new worker waits and activates on the next launch. Bump CACHE when shipped files change.
-const CACHE = 'shell-v25';
+const CACHE = 'shell-v26';
 const SHELL = [
-  './', 'index.html', 'design/tokens.css', 'src/styles.css',
+  './', 'index.html', 'about.html', 'src/about.js', 'src/render/about.js', 'design/tokens.css', 'src/styles.css',
   'src/styles/search.css', 'src/styles/settings.css', 'src/styles/banners.css', 'src/styles/about.css', 'src/styles/install.css', 'src/styles/footer.css',
   'src/theme-boot.js', 'src/theme.js', 'src/main.js', 'src/app.js', 'src/compose.js', 'src/state.js',
   'manifest.webmanifest', 'src/api/cache.js', 'src/api/diagnostics.js', 'src/api/http.js', 'src/api/keycheck.js', 'src/api/quota.js',

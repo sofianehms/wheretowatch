@@ -2,6 +2,7 @@
   "root": ".",
   "pages": [
     "/",
+    "/about.html",
     { "path": "/?q=x", "lighthouse": false },
     { "path": "/404.html", "lighthouse": false },
     { "path": "/test/states.html?view=components", "lighthouse": false },
