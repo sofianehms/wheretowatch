@@ -8,6 +8,7 @@ import AxeBuilder from '@axe-core/playwright';
 import lighthouse from 'lighthouse';
 import * as chromeLauncher from 'chrome-launcher';
 import { startServer } from './serve.mjs';
+import { checkPwa } from './check-pwa.mjs';
 import movieDetails from '../test/fixtures/tmdb/movie-details.js';
 
 const startedAt = performance.now();
@@ -351,6 +352,11 @@ try {
                  : ok(`lighthouse ${route}: ${line}`);
     }
   } finally { await chrome.kill(); }
+
+  const offlineLabel = 'offline scenario';
+  const offlineProblems = await checkPwa({ browser, origin, shotsDir });
+  if (offlineProblems.length) offlineProblems.forEach((p) => fail(`${offlineLabel}: ${p}`));
+  else ok(`${offlineLabel} (shell, "Connection required", viewed title readable with its date, no request, network back)`);
 } finally {
   await browser.close();
   server.close();

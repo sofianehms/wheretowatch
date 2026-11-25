@@ -111,5 +111,11 @@ export function createTypeahead({
       if (composition) composition = 'cancelled';
       reset();
     },
+    // The network is gone: nothing queued, running or settled survives. The field is disabled, so a
+    // composition may never report its end: forget it rather than ignore every later keystroke.
+    stop() {
+      composition = undefined;
+      reset();
+    },
   };
 }

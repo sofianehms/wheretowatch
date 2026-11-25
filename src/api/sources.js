@@ -66,6 +66,14 @@ import { HttpError } from './http.js';
 
 export const coverageKeys = Object.freeze({ tmdb: 'tmdb.regions', sa: 'sa.countries' });
 
+// Cache entries of one title, by typed reference: written by the clients, read back without a network.
+export const titleKeys = Object.freeze({
+  details: (ref) => `tmdb.details.${ref}`,
+  providers: (ref) => `tmdb.providers.${ref}`,
+  notFound: (ref) => `tmdb.notFound.${ref}`,
+  sa: (ref) => `sa.shows.${ref}`,
+});
+
 /**
  * @typedef {{status: 'fresh'|'stale', countries: string[], fetchedAt: string} | {status: 'unknown'}} Coverage
  */
@@ -128,6 +136,21 @@ export function createSources({
       const snapshots = await collectAvailability(selected, title, signal);
       const { assembleAvailability } = await import('./availability.js');
       return assembleAvailability({ selected, snapshots, signal, cache, now });
+    },
+
+    /**
+     * A title already viewed, read from the cache alone: no request is ever made.
+     * @returns {Promise<import('./availability.js').SavedTitle|null>}
+     */
+    async readCachedTitle(ref) {
+      const { readSavedTitle } = await import('./availability.js');
+      return readSavedTitle({ ref, selected: availabilitySources.filter(isEnabled), cache, now });
+    },
+
+    /** @returns {Promise<import('./availability.js').SavedTitle[]>} The viewed titles, newest data first. */
+    async listCachedTitles() {
+      const { listSavedTitles } = await import('./availability.js');
+      return listSavedTitles({ selected: availabilitySources.filter(isEnabled), cache, now });
     },
   };
 }

@@ -208,16 +208,17 @@ function build(container, fallback) {
     const { status, query = '' } = state;
     const offline = state.online === false;
     input.disabled = offline;
+    input.placeholder = t(offline ? 'search.offline.title' : 'search.placeholder');
     field.classList.toggle('search__field--disabled', offline);
     hint.hidden = status !== 'idle' || offline;
     list.replaceChildren();
     options = [];
     titles = [];
 
+    // The reason is the placeholder of the disabled field: no panel that would cover the viewed titles.
     if (offline) {
-      const body = el('p', 'listbox__note');
-      body.append(el('strong', '', t('search.offline.title')), document.createElement('br'), t('search.offline.hint'));
-      note(body);
+      input.value = '';
+      note();
       announce(t('search.offline.title'));
       return;
     }
@@ -290,9 +291,7 @@ function build(container, fallback) {
     showStatus();
     syncClear();
     // A response that arrives after the user dismissed the list or moved on must not reopen it.
-    // The offline notice does not depend on a dismissal: the field is disabled and nothing else says why.
-    if (state.online === false) dismissed = false;
-    setOpen(!dismissed && (state.status !== 'idle' || state.online === false));
+    setOpen(!dismissed && state.status !== 'idle');
   }
 
   function clearField() {
@@ -330,8 +329,6 @@ function build(container, fallback) {
   });
   root.addEventListener('focusout', (event) => {
     if (root.contains(event.relatedTarget)) return;
-    // Disabling the focused field (going offline) also fires this event: the notice stays visible.
-    if (input.disabled || state.online === false) return;
     dismissed = true;
     setOpen(false);
   });
@@ -358,7 +355,7 @@ function build(container, fallback) {
     } else if (event.key === 'Escape') {
       // The native search field clears itself on Escape: the first press only closes the popup.
       event.preventDefault();
-      if (open && (state.status !== 'idle' || state.online === false)) {
+      if (open && state.status !== 'idle') {
         dismissed = true;
         setOpen(false);
       } else clearField();

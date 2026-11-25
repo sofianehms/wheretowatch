@@ -7,6 +7,7 @@ export default {
   'direct.heading': 'Title',
   'direct.loading': 'Loading title details…',
   'direct.missing': 'Title not found. Search by name to find it.',
+  unsaved: 'Connection required. This title is not saved on this device.',
   'error.headline': 'Couldn’t load availability',
   'error.checkKeys': 'Check my keys',
   'error.retry': 'Try again',

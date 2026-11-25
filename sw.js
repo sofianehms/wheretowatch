@@ -1,5 +1,5 @@
 // Minimal offline shell cache. A new worker waits and activates on the next launch. Bump CACHE when shipped files change.
-const CACHE = 'shell-v25';
+const CACHE = 'shell-v26';
 const SHELL = [
   './', 'index.html', 'design/tokens.css', 'src/styles.css',
   'src/styles/search.css', 'src/styles/settings.css', 'src/styles/banners.css', 'src/styles/about.css', 'src/styles/install.css', 'src/styles/footer.css',
@@ -17,7 +17,7 @@ const SHELL = [
 // Loaded on demand (title page, country selector). Cached with the shell so a fresh offline launch finds them,
 // but kept out of the first-load budget, which only counts what the first paint needs.
 const LAZY = [
-  'src/title-page.js', 'src/render/title.js', 'src/render/languages.js', 'src/render/service-picker.js', 'src/render/all-services.js', 'src/render/service-logo.js', 'src/render/country.js', 'src/i18n/en/country.js', 'src/render/diagnostics.js', 'src/i18n/en/diagnostics.js',
+  'src/title-page.js', 'src/offline-view.js', 'src/render/title.js', 'src/render/languages.js', 'src/render/service-picker.js', 'src/render/all-services.js', 'src/render/service-logo.js', 'src/render/country.js', 'src/i18n/en/country.js', 'src/render/diagnostics.js', 'src/i18n/en/diagnostics.js',
   'src/styles/title.css', 'src/core/reconcile.js', 'src/core/verdict.js', 'src/api/availability.js', 'src/api/streaming.js',
 ];
 
@@ -33,5 +33,7 @@ self.addEventListener('fetch', (e) => {
   // Shell only: same-origin GET requests. Cross-origin requests (API calls) are never intercepted,
   // so no API response is ever stored in the cache.
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
-  e.respondWith(caches.match(e.request, { cacheName: CACHE }).then((hit) => hit || fetch(e.request)));
+  // A shortcut or title link carries parameters: the page itself is the same, so it opens without a network too.
+  const options = { cacheName: CACHE, ignoreSearch: e.request.mode === 'navigate' };
+  e.respondWith(caches.match(e.request, options).then((hit) => hit || fetch(e.request)));
 });

@@ -158,6 +158,11 @@ export function createCache({ storage = browserStorage(), now = Date.now, prefix
     suggestions.delete(key);
   }
 
+  /** Names of the persisted entries, to be read back with `getStale`. */
+  function keys() {
+    return storedKeys().map((key) => key.slice(prefix.length));
+  }
+
   function clear() {
     suggestions.clear();
     for (const key of storedKeys()) remove(key);
@@ -170,5 +175,5 @@ export function createCache({ storage = browserStorage(), now = Date.now, prefix
     return { entries: entries.length + suggestions.size, bytes };
   }
 
-  return { get, getStale, set, clear, stats };
+  return { get, getStale, set, keys, clear, stats };
 }

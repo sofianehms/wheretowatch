@@ -18,7 +18,11 @@ function cleanLaunchUrl() {
 
 const app = compose();
 renderInstallHint(document.getElementById('install'), { settings: app.settings });
-startApp(app, document, { launchQuery: q, launchTitle: t, onTitleLaunchComplete: cleanLaunchUrl });
+const screens = startApp(app, document, {
+  launchQuery: q, launchTitle: t, onTitleLaunchComplete: cleanLaunchUrl, online: navigator.onLine !== false,
+});
+addEventListener('online', () => screens.setOnline(true));
+addEventListener('offline', () => screens.setOnline(false));
 if (t === null) cleanLaunchUrl();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {

@@ -2,7 +2,7 @@ import { createCache, TTL_BY_KIND } from './cache.js';
 import { canUseStale, HttpError, request } from './http.js';
 import { country, offerType, serviceKey } from '../core/normalize.js';
 import { getLocale as appLocale } from '../i18n/strings.js';
-import { coverageKeys } from './sources.js';
+import { coverageKeys, titleKeys } from './sources.js';
 
 const baseUrl = 'https://api.themoviedb.org/3/';
 const source = 'tmdb';
@@ -98,7 +98,7 @@ export function createTmdbSource({
   }
 
   function loadDetails(ref, signal, usable) {
-    return loadTitleData(`tmdb.details.${ref}`, 'metadata', async () => {
+    return loadTitleData(titleKeys.details(ref), 'metadata', async () => {
       const data = await get(ref, { append_to_response: 'external_ids' }, signal);
       const imdbId = data.external_ids?.imdb_id ?? null;
       const title = toTitle({ ...data, media_type: ref.split('/')[0] });
@@ -188,7 +188,7 @@ export function createTmdbSource({
       }
 
       const ref = `${mediaType}/${tmdbId}`;
-      const missingKey = `tmdb.notFound.${ref}`;
+      const missingKey = titleKeys.notFound(ref);
       const missing = cache.get(missingKey);
       if (missing) {
         const { fetchedAt, details } = missing.value;
@@ -202,7 +202,7 @@ export function createTmdbSource({
 
       const [details, providers] = await Promise.allSettled([
         loadDetails(ref, signal),
-        loadTitleData(`tmdb.providers.${ref}`, 'availability', async () => {
+        loadTitleData(titleKeys.providers(ref), 'availability', async () => {
           const { results } = await get(`${ref}/watch/providers`, undefined, signal);
           if (!results || typeof results !== 'object' || Array.isArray(results)) {
             throw new HttpError('server');

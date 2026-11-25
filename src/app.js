@@ -1,6 +1,6 @@
 // Application shell: wires the services to the welcome, the search and the Settings screens.
 import { createTypeahead } from './core/typeahead.js';
-import { DEGRADATION_TYPES, degradationBanners, renderBanners, tmdbOnlyBanner } from './render/banners.js';
+import { DEGRADATION_TYPES, degradationBanners, offlineBanner, renderBanners, tmdbOnlyBanner } from './render/banners.js';
 import { renderHeader } from './render/header.js';
 import { render as renderSearch } from './render/search.js';
 import { renderSettings } from './render/settings.js';
@@ -11,10 +11,13 @@ import { applyTheme } from './theme.js';
  * Show the right screen for the stored keys and the navigation state.
  * @param {ReturnType<typeof import('./compose.js').compose>} app The composed services.
  * @param {ParentNode} root Where the screen slots (`#header`, `#welcome`, `#settings`, `#search-view`, `#search`) live.
- * @param {{launchQuery?: string | null, launchTitle?: string | null, onTitleLaunchComplete?: () => void}} [options]
+ * @param {{launchQuery?: string | null, launchTitle?: string | null, onTitleLaunchComplete?: () => void, online?: boolean}} [options]
  *   A title link or query runs when the search screen first becomes available.
+ * @returns {{setOnline: (online: boolean) => void}} Called when the network is lost or comes back.
  */
-export function startApp(app, root = document, { launchQuery = null, launchTitle = null, onTitleLaunchComplete } = {}) {
+export function startApp(app, root = document, {
+  launchQuery = null, launchTitle = null, onTitleLaunchComplete, online = globalThis.navigator?.onLine !== false,
+} = {}) {
   const { store, settings } = app;
 
   const headerSlot = root.querySelector('#header');
@@ -26,18 +29,21 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
   const bannersSlot = root.querySelector('#banners');
   const titleSlot = root.querySelector('#title') ?? searchView.appendChild(Object.assign((root.ownerDocument ?? root).createElement('div'), { id: 'title' }));
 
+  const offlineSlot = root.querySelector('#offline')
+    ?? (titleSlot.before((root.ownerDocument ?? root).createElement('div')), Object.assign(titleSlot.previousSibling, { id: 'offline' }));
+
+  let connected = online;
   let searchState = { status: 'idle' };
   let imageConfiguration = null;
   let imageRequested = false;
   let pendingLaunch = launchQuery;
   let pendingRef = launchTitle;
 
-  const online = () => globalThis.navigator?.onLine !== false;
   const noSearch = async () => ({ titles: [] });
 
   function draw(next = searchState) {
     searchState = next;
-    const input = renderSearch(searchSlot, { ...next, online: online(), imageConfiguration }, handlers).input;
+    const input = renderSearch(searchSlot, { ...next, online: connected, imageConfiguration }, handlers).input;
     input.dataset.focusTarget = '';
   }
 
@@ -48,15 +54,58 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
   // a key tested, saved or removed leaves the result, and so its notice, until a new answer replaces it.
   let titleSources = null;
   const clearTitle = () => {
+    const open = pendingTitle !== null;
     pendingTitle = null;
     titlePage?.clear();
     if (!titlePage) titleSlot.replaceChildren();
+    if (open) syncOffline();
   };
+
+  // Without a network: the viewed titles, or the way back to them while one is open.
+  let offlineView = null;
+  let offlineRun = 0;
+  const loadOfflineView = async () => { offlineView ??= await import('./offline-view.js'); };
+  async function syncOffline() {
+    const run = ++offlineRun;
+    if (connected || shown !== 'search') {
+      offlineSlot.replaceChildren();
+      return;
+    }
+    try {
+      if (!offlineView) await loadOfflineView();
+      const entries = pendingTitle === null ? await app.sources?.listCachedTitles?.() ?? [] : null;
+      if (run !== offlineRun) return;
+      offlineView.renderOffline(offlineSlot, {
+        entries,
+        settings: app.settings,
+        onChoose: (title) => {
+          // The user moved on: a query still waiting for the network must not open over this title.
+          pendingLaunch = null;
+          showTitle(title);
+          offlineSlot.querySelector('button')?.focus();
+        },
+        onBack: async () => {
+          const ref = pendingTitle?.ref ?? pendingTitle;
+          clearTitle();
+          await syncOffline();
+          offlineView.focusEntry(offlineSlot, ref);
+        },
+      });
+    } catch {
+      // The banner already says the app is offline.
+    }
+  }
   function showTitle(title) {
     pendingTitle = title;
+    // Fetched while the network is there: on a very first visit the worker does not serve this page yet.
+    if (connected) loadOfflineView().catch(() => {});
+    // Draws the way back before returning (once the view is loaded), so that it can take the focus.
+    syncOffline();
     return import('./title-page.js').then(({ createTitlePage }) => {
       titlePage ??= createTitlePage({
-        app, slot: titleSlot, root, imageConfiguration: () => imageConfiguration, onCheckKeys: () => openSettings(),
+        app, slot: titleSlot, root, onCheckKeys: () => openSettings(), isOnline: () => connected,
+        // No picture is requested without a network: posters and logos fall back to initials and names.
+        imageConfiguration: () => (connected ? imageConfiguration : null),
         onSources: (snapshots) => { titleSources = snapshots; syncDegradation(); },
       });
       if (pendingTitle !== title) return;
@@ -97,12 +146,14 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
 
   // Poster URLs need the TMDB image configuration; without it posters show initials.
   function loadImageConfiguration() {
-    if (imageRequested || !app.imageConfiguration) return;
+    if (!connected || imageRequested || !app.imageConfiguration) return;
     imageRequested = true;
+    // A request that failed, with the network for instance, is made again at the next occasion.
     Promise.resolve(app.imageConfiguration()).then((configuration) => {
       imageConfiguration = configuration ?? null;
+      imageRequested = imageConfiguration !== null;
       draw();
-    }, () => {});
+    }, () => { imageRequested = false; });
   }
 
   function runLaunch() {
@@ -113,6 +164,8 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
       showTitle(ref).finally(onTitleLaunchComplete);
       return;
     }
+    // A query waits for the network: searched without it, it would only leave an error behind.
+    if (!connected) return;
     const query = pendingLaunch;
     pendingLaunch = null;
     if (query === null) return;
@@ -120,8 +173,21 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
     typeahead.submit(query);
   }
 
-  globalThis.addEventListener?.('online', () => { syncDegradation(); draw(); });
-  globalThis.addEventListener?.('offline', () => draw());
+  function setOnline(next) {
+    connected = next;
+    syncBanners();
+    // Search work belongs to the connection it started on.
+    if (!next) typeahead.stop();
+    draw();
+    // A title still loading starts over on the new connection (from the saved data when it is lost).
+    // Back online, so does one that was not saved or that the network failed.
+    if (pendingTitle !== null && (titlePage?.isLoading() || (next && (titlePage?.isUnsaved() || titlePage?.isCutOff())))) showTitle(pendingTitle);
+    else syncOffline();
+    if (next && shown === 'search') {
+      loadImageConfiguration();
+      runLaunch();
+    }
+  }
 
   const openSettings = () => {
     firstRun = !settings.hasKey('tmdb');
@@ -151,7 +217,8 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
   // Quota and source failures. The list is replaced only when it changes, so focus survives.
   function syncDegradation() {
     const quota = settings.hasKey('sa') ? app.quota?.status() ?? null : null;
-    const next = settings.hasKey('tmdb') ? degradationBanners({ quota, snapshots: titleSources }) : [];
+    // Offline, one banner says it all: neither the quota nor a refresh can be acted on.
+    const next = connected && settings.hasKey('tmdb') ? degradationBanners({ quota, snapshots: titleSources }) : [];
     const { banners } = store.get();
     const current = banners.filter(({ type }) => DEGRADATION_TYPES.has(type));
     if (JSON.stringify(current) === JSON.stringify(next)) return;
@@ -159,12 +226,14 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
   }
 
   function syncMode() {
-    const mode = !settings.hasKey('tmdb') ? 'noKey' : settings.hasKey('sa') ? 'full' : 'tmdbOnly';
+    const mode = !connected ? 'offline' : !settings.hasKey('tmdb') ? 'noKey' : settings.hasKey('sa') ? 'full' : 'tmdbOnly';
     const { mode: previous, banners } = store.get();
-    if (previous === mode) return;
-    // Only the TMDB-only entry follows the mode; other notices are left alone.
-    const others = banners.filter(({ type }) => type !== 'tmdbOnly');
-    store.set({ mode, banners: mode === 'tmdbOnly' ? [tmdbOnlyBanner(), ...others] : others });
+    // The store starts in the offline mode, before any banner is there.
+    if (previous === mode && (mode !== 'offline' || banners.some(({ type }) => type === 'offline'))) return;
+    // Only these entries follow the mode; other notices are left alone.
+    const others = banners.filter(({ type }) => type !== 'tmdbOnly' && type !== 'offline');
+    const own = mode === 'tmdbOnly' ? [tmdbOnlyBanner()] : mode === 'offline' ? [offlineBanner()] : [];
+    store.set({ mode, banners: [...own, ...others] });
   }
 
   function render(state) {
@@ -237,9 +306,11 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
       target.focus();
     }
     shown = view;
+    syncOffline();
   }
 
   syncBanners();
   store.subscribe(render);
   render(store.get());
+  return { setOnline };
 }
