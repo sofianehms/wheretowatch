@@ -25,12 +25,13 @@ function tracksOf(row) {
 }
 
 /**
- * What the second source says about each offer of one country: its type, best quality and leaving date.
- * Offers of one type that leave on the same day (or have no date) share a line with the best of their
- * qualities. A date already past (saved data) is dropped, and a line with nothing to add is omitted.
+ * What the second source says about each offer of one country: its type, quality and leaving date.
+ * Each offer keeps its own quality and date together; only offers that would read the same share a line.
+ * A date already past (saved data) is dropped, and an offer with nothing to add is omitted.
  * @param {{offers: {sa?: {offerType: string, quality: string|null, expiresOn: string|null}[]}}} row
  * @param {number} [now] Timestamp in milliseconds.
- * @returns {{type: string, quality: string|null, leaves: string|null}[]} By offer type, soonest date first, undated last.
+ * @returns {{type: string, quality: string|null, leaves: string|null}[]} By offer type, soonest date first (undated last),
+ *   then best quality first.
  */
 export function offerDetails(row, now = Date.now()) {
   const lines = new Map();
@@ -38,15 +39,14 @@ export function offerDetails(row, now = Date.now()) {
     const time = Date.parse(offer.expiresOn);
     const expiry = time > now ? time : Infinity;
     const leaves = expiry === Infinity ? null : formatDate(new Date(expiry));
-    const key = `${offer.offerType}|${leaves}`;
-    const line = lines.get(key) ?? { type: offer.offerType, rank: -1, expiry, leaves };
-    line.rank = Math.max(line.rank, QUALITIES.indexOf(offer.quality));
-    lines.set(key, line);
+    const quality = QUALITIES.includes(offer.quality) ? offer.quality : null;
+    if (quality || leaves) lines.set(`${offer.offerType}|${quality}|${leaves}`, { type: offer.offerType, quality, expiry, leaves });
   }
   return [...lines.values()]
-    .filter(({ rank, leaves }) => rank >= 0 || leaves)
-    .sort((a, b) => OFFER_TYPES.indexOf(a.type) - OFFER_TYPES.indexOf(b.type) || (a.expiry < b.expiry ? -1 : 1))
-    .map(({ type, rank, leaves }) => ({ type, quality: QUALITIES[rank] ?? null, leaves }));
+    .sort((a, b) => OFFER_TYPES.indexOf(a.type) - OFFER_TYPES.indexOf(b.type)
+      || (a.expiry === b.expiry ? 0 : a.expiry < b.expiry ? -1 : 1)
+      || QUALITIES.indexOf(b.quality) - QUALITIES.indexOf(a.quality))
+    .map(({ type, quality, leaves }) => ({ type, quality, leaves }));
 }
 
 function offersBlock(row) {
