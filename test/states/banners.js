@@ -1,7 +1,11 @@
 import { createCache } from '../../src/api/cache.js';
 import { createQuota } from '../../src/api/quota.js';
 import { startApp } from '../../src/app.js';
-import { renderBanners, tmdbOnlyBanner } from '../../src/render/banners.js';
+import { degradationBanners, renderBanners, tmdbOnlyBanner } from '../../src/render/banners.js';
+import { reconcile } from '../../src/core/reconcile.js';
+import { computeVerdict } from '../../src/core/verdict.js';
+import { renderTitle } from '../../src/render/title.js';
+import { disagreement } from '../fixtures/reconcile/scenarios.js';
 import { createSettings } from '../../src/settings/keys.js';
 import { createStore } from '../../src/state.js';
 import { checkNoOverflow } from './kit.js';
@@ -37,21 +41,158 @@ function checkRegion(slot, expected) {
 }
 
 // The real shell with a TMDB key (and optionally a second one) saved.
-function mountApp(container, stored) {
+function mountApp(container, stored, { used = 0, snapshots } = {}) {
   container.innerHTML = '<div id="header"></div><div id="welcome" hidden></div><div id="settings" hidden></div>'
-    + '<section id="search-view" hidden><div id="banners"></div><div id="search"></div></section>';
+    + '<section id="search-view" hidden><div id="banners"></div><div id="search"></div><div id="title"></div></section>';
   const storage = memoryStorage(stored);
   const quota = createQuota({ storage });
+  for (let call = 0; call < used; call += 1) quota.record();
   const settings = createSettings({ storage, navigatorLike: { language: 'en-GB' }, cache: createCache({ storage }), quota });
   const store = createStore();
-  startApp({ store, settings, checkKey: async () => 'valid', quotaLimit: () => quota.status().limit, durable: true }, container);
-  return { store, settings };
+  let loads = 0;
+  const title = { mediaType: 'movie', tmdbId: 11, imdbId: null, title: 'Harbour Lights', year: 2023, posterPath: null, ref: 'movie/11' };
+  const sources = snapshots && {
+    loadAvailability: async () => {
+      loads += 1;
+      return { ...disagreement, snapshots };
+    },
+  };
+  startApp({
+    store, settings, quota, sources, getTitle: async () => title,
+    checkKey: async () => 'valid', quotaLimit: () => quota.status().limit, durable: true,
+  }, container, { launchTitle: snapshots ? title.ref : null });
+  return { store, settings, loads: () => loads };
 }
+
+const bothKeys = { 'wtw.key.tmdb': 'sample-tmdb-key', 'wtw.key.sa': 'sample-sa-key' };
+const quotaState = (used) => ({ used, limit: 1000, warn: used >= 800, blocked: used >= 1000, nextReset: Date.UTC(2026, 11, 1) });
+const savedSnapshots = (reason) => disagreement.snapshots.map((snapshot) => (
+  snapshot.source === 'sa' ? { ...snapshot, stale: true, reason } : snapshot));
+const failedSnapshots = disagreement.snapshots.map((snapshot) => (
+  snapshot.source === 'sa' ? { ...snapshot, status: 'unavailable', offers: [], error: { type: 'server' } } : snapshot));
+
+// A failure banner is read from its words and icon, whatever its color.
+function bannerScenario(name, input, expected) {
+  return {
+    name: `Banner · ${name}`,
+    render(container) {
+      container.region = slotIn(container);
+      renderBanners(container.region, degradationBanners(input));
+    },
+    check(container) {
+      const problems = checkRegion(container.region, 1);
+      if (!expected.test(container.region.textContent)) problems.push(`unexpected text: ${container.region.textContent}`);
+      if (!container.region.querySelector('.banner__title')?.textContent) problems.push('the banner has no title');
+      if (!container.region.querySelector('.banner > .icon')) problems.push('the banner has no icon');
+      return problems;
+    },
+  };
+}
+
+async function until(test) {
+  for (let turn = 0; turn < 200 && !test(); turn += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+}
+
+const degradationScenarios = [
+  bannerScenario('quota warning at 80%', { quota: quotaState(812) }, /812 of 1,000 monthly calls used.*Resets on 1 Dec 2026/),
+  bannerScenario('quota reached with saved languages', { quota: quotaState(1000), snapshots: savedSnapshots('quota') },
+    /Monthly limit.*saved on .*\(not refreshed\).*Resets on 1 Dec 2026/),
+  bannerScenario('source error', { quota: quotaState(10), snapshots: failedSnapshots }, /Second source unavailable/),
+  {
+    name: 'Banner · stale data on the title page',
+    render(container) {
+      const input = { ...disagreement, snapshots: savedSnapshots('error') };
+      const reconciled = reconcile({ ...input, serviceKey: 'netflix' });
+      const verdict = computeVerdict({ reconciled, snapshots: input.snapshots, serviceKey: 'netflix', homeCountry: 'FR', mediaType: 'movie' });
+      renderTitle(container, {
+        status: 'result', verdict, reconciled,
+        title: { mediaType: 'movie', tmdbId: 11, title: 'Harbour Lights', year: 2023, posterPath: null, ref: 'movie/11' },
+      });
+    },
+    check(container) {
+      const found = [...container.querySelectorAll('.verdict .banner')].some((box) => /data from \d{1,2} [A-Z][a-z]{2} 2026 \(not refreshed\)/.test(box.textContent));
+      // The decorative hero fade bleeds on purpose, so elements are measured rather than the scroll width.
+      const edge = container.getBoundingClientRect().right;
+      const sticksOut = [...container.querySelectorAll('*')].some((node) => node.getBoundingClientRect().right > edge + 1);
+      return [...(sticksOut ? ['the title page overflows its container'] : []), ...(found ? [] : ['the "not refreshed" notice is missing'])];
+    },
+  },
+  {
+    name: 'Banner · in the app, warning with its way to Settings',
+    render(container) {
+      container.mounted = mountApp(container, bothKeys, { used: 800 });
+    },
+    check(container) {
+      const problems = checkRegion(container.querySelector('#banners'), 1);
+      container.querySelector('.banner__actions button')?.click();
+      if (!container.mounted.store.get().settingsOpen) problems.push('"Details" does not open Settings');
+      return problems;
+    },
+  },
+  {
+    name: 'Banner · in the app, source error follows the title on screen',
+    async render(container) {
+      container.mounted = mountApp(container, bothKeys, { snapshots: failedSnapshots });
+      await until(() => container.querySelector('#banners .banner'));
+    },
+    check: (container) => {
+      const problems = checkRegion(container.querySelector('#banners'), 1);
+      if (!/Second source unavailable/.test(container.querySelector('#banners').textContent)) problems.push('the source error is missing');
+      return problems;
+    },
+  },
+  ...[
+    ['tested', (field) => field.button('Test')],
+    ['replaced', (field) => { field.type('another-sa-key'); field.button('Save'); }],
+    ['removed', (field) => { field.type(''); field.button('Save'); }],
+  ].map(([change, act]) => ({
+    name: `Banner · in the app, source error stays while its result is shown, second key ${change}`,
+    async render(container) {
+      container.mounted = mountApp(container, bothKeys, { snapshots: failedSnapshots });
+      await until(() => container.querySelector('#banners .banner'));
+      container.querySelector('.banner__actions button')?.click();
+      container.querySelector('#header button[aria-label="Settings"]')?.click();
+      const input = container.querySelectorAll('#settings input[type="password"]')[1];
+      const buttons = (name) => [...container.querySelectorAll('#settings button')].filter((node) => node.textContent === name)[1];
+      act({
+        type(value) {
+          input.value = value;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        },
+        button: (name) => buttons(name).click(),
+      });
+      await settle();
+      await settle();
+      container.querySelector('#header button[aria-label="Back to search"]')?.click();
+      await settle();
+    },
+    check(container) {
+      const text = container.querySelector('#banners').textContent;
+      const problems = checkNoOverflow(container.querySelector('#banners'));
+      if (!/Second source unavailable/.test(text)) problems.push(`the source error is gone: ${text}`);
+      if (!container.querySelector('#title').textContent.includes('Harbour Lights')) problems.push('the result is gone');
+      if (container.mounted.loads() !== 1) problems.push(`${container.mounted.loads()} availability loads, expected 1`);
+      return problems;
+    },
+  })),
+  {
+    name: 'Banner · in the app, quota reached before any title',
+    render(container) {
+      container.mounted = mountApp(container, bothKeys, { used: 1000 });
+    },
+    check(container) {
+      const problems = checkRegion(container.querySelector('#banners'), 1);
+      if (!/Languages are paused/.test(container.querySelector('#banners').textContent)) problems.push('the block is not announced');
+      return problems;
+    },
+  },
+];
 
 const note = { type: 'quota', tone: 'caution', title: 'Quota low', message: 'Few lookups left today.', dismissible: true };
 const plain = { type: 'info', message: 'Plain notice, no action.' };
 
 export default [
+  ...degradationScenarios,
   {
     name: 'Banner · single, without an action',
     render(container) {

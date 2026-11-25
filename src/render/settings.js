@@ -1,5 +1,5 @@
 import { DEFAULT_QUOTA_CONFIG } from '../api/quota.js';
-import { formatNumber, t } from '../i18n/strings.js';
+import { formatNumber, formatResetDate, t } from '../i18n/strings.js';
 import { applyTheme, THEMES } from '../theme.js';
 import { el, externalLink, icon, richText, uniqueId } from './dom.js';
 
@@ -192,6 +192,37 @@ function keyField({ provider, settings, checkKey, quotaLimit, durable, onChange,
   };
 }
 
+// State of the monthly calls: a text and an icon say it, the bar is decorative.
+function usageCard(quotaStatus) {
+  const box = el('div', 'usage');
+  const meter = el('div', 'meter');
+  const line = el('p');
+  const bar = el('div', 'meter__bar', '', { 'aria-hidden': 'true' });
+  const fill = el('div', 'meter__fill');
+  bar.append(fill);
+  meter.append(line, bar);
+  const help = el('p', 'field__help');
+  box.append(el('h3', '', t('settings.usage.title')), meter, help);
+
+  function refresh() {
+    const { used, limit, warn, blocked, nextReset } = quotaStatus();
+    const state = blocked ? 'blocked' : warn ? 'warning' : 'normal';
+    const params = { used: formatNumber(used), limit: formatNumber(limit), date: formatResetDate(nextReset) };
+    meter.className = state === 'normal' ? 'meter' : `meter meter--${blocked ? 'danger' : 'caution'}`;
+    line.replaceChildren(
+      ...(state === 'normal' ? [] : [icon(blocked ? 'alert' : 'gauge', 'sm'), ' ']),
+      el('strong', '', t('settings.usage.count', params)), ' ',
+      el('span', 'muted', t(`settings.usage.${state}`, params)),
+    );
+    // Set through the CSSOM: the content security policy refuses inline style attributes.
+    fill.style.width = `${blocked ? 100 : Math.min(100, (used / limit) * 100)}%`;
+    help.textContent = t('settings.usage.help', params);
+  }
+
+  refresh();
+  return { box, refresh };
+}
+
 /**
  * Confirmation dialog for clearing every stored value. `onConfirm` may throw; the dialog then
  * shows an error and stays open. Focus starts on Cancel and stays inside the dialog.
@@ -249,12 +280,13 @@ export function renderClearDialog({ onCancel, onConfirm }) {
  * @param {ReturnType<typeof import('../settings/keys.js').createSettings>} options.settings
  * @param {(provider: 'tmdb'|'sa', value: string, deps: {signal: AbortSignal}) => Promise<string>} options.checkKey
  * @param {() => number} [options.quotaLimit] Monthly call limit of the optional source.
+ * @param {ReturnType<typeof import('../api/quota.js').createQuota>['status']} [options.quotaStatus] Shows the usage counter.
  * @param {boolean} [options.durable] False when keys last only for this visit.
  * @param {(provider: 'tmdb'|'sa', outcome: string) => void} [options.onChange] After a key is saved, removed or verified.
  * @param {() => void} [options.onCleared] Called after all data has been cleared.
  * @returns {HTMLElement} The screen, with `pending()`, `confirming()`, `dispose()`.
  */
-export function renderSettings({ settings, checkKey, quotaLimit, sources, onCountryChange, durable = true, onChange = () => {}, onCleared = () => {} }) {
+export function renderSettings({ settings, checkKey, quotaLimit, quotaStatus, sources, onCountryChange, durable = true, onChange = () => {}, onCleared = () => {} }) {
   const root = el('div', 'settings');
   let countrySection;
   // A key change alters the active sources, hence the countries.
@@ -267,7 +299,10 @@ export function renderSettings({ settings, checkKey, quotaLimit, sources, onCoun
   // Only the first field with a pending change has the primary Save.
   let tmdb;
   let sa;
+  const usage = quotaStatus ? usageCard(quotaStatus) : null;
   const markPrimary = () => {
+    // A key test spends a call, so the counter follows every field update.
+    usage?.refresh();
     const first = [tmdb, sa].find((field) => field?.dirty());
     for (const field of [tmdb, sa]) {
       if (field) field.save.className = field === first ? 'btn btn--primary' : 'btn btn--secondary';
@@ -282,6 +317,7 @@ export function renderSettings({ settings, checkKey, quotaLimit, sources, onCoun
     externalLink(t('settings.tmdb.url'), t('settings.tmdb.create')),
     sa.field,
     externalLink(t('settings.sa.url'), t('settings.sa.create')),
+    ...(usage ? [usage.box] : []),
     el('p', 'field__help', t('settings.keys.terms')),
   );
   if (!durable) keys.insertBefore(el('p', 'key-state key-state--edit', t('settings.keys.session'), { role: 'status' }), tmdb.field);

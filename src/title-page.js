@@ -9,9 +9,9 @@ import { renderTitle } from './render/title.js';
 
 /**
  * @param {{app: ReturnType<typeof import('./compose.js').compose>, slot: HTMLElement, root: ParentNode,
- *   imageConfiguration: () => object|null, onCheckKeys: () => void}} options
+ *   imageConfiguration: () => object|null, onCheckKeys: () => void, onSources?: (snapshots: object[]|null) => void}} options
  */
-export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKeys }) {
+export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKeys, onSources = () => {} }) {
   const doc = root.ownerDocument ?? root;
   const link = doc.createElement('link');
   link.rel = 'stylesheet';
@@ -48,11 +48,13 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
     run = null;
     shown = null;
     slot.replaceChildren();
+    onSources(null);
   }
 
   async function show(title, ref = null) {
     run?.abort();
     shown = null;
+    onSources(null);
     const current = new AbortController();
     run = current;
     const renderLoading = (status) => renderTitle(slot, { status, title, imageConfiguration: imageConfiguration() });
@@ -85,6 +87,7 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
     if (current.signal.aborted) return;
     shown = { title, snapshots: loaded.snapshots, coverage: loaded.coverage, retry };
     present();
+    onSources(loaded.snapshots);
   }
 
   function showReference(ref) {

@@ -1,6 +1,6 @@
 // Application shell: wires the services to the welcome, the search and the Settings screens.
 import { createTypeahead } from './core/typeahead.js';
-import { renderBanners, tmdbOnlyBanner } from './render/banners.js';
+import { DEGRADATION_TYPES, degradationBanners, renderBanners, tmdbOnlyBanner } from './render/banners.js';
 import { renderHeader } from './render/header.js';
 import { render as renderSearch } from './render/search.js';
 import { renderSettings } from './render/settings.js';
@@ -44,6 +44,9 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
   // The title page needs the network: its code and styles load on the first choice, outside the offline shell.
   let titlePage = null;
   let pendingTitle = null;
+  // The answers of the title on screen, which the failure banners describe. Only the title page sets them:
+  // a key tested, saved or removed leaves the result, and so its notice, until a new answer replaces it.
+  let titleSources = null;
   const clearTitle = () => {
     pendingTitle = null;
     titlePage?.clear();
@@ -54,6 +57,7 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
     return import('./title-page.js').then(({ createTitlePage }) => {
       titlePage ??= createTitlePage({
         app, slot: titleSlot, root, imageConfiguration: () => imageConfiguration, onCheckKeys: () => openSettings(),
+        onSources: (snapshots) => { titleSources = snapshots; syncDegradation(); },
       });
       if (pendingTitle !== title) return;
       return typeof title === 'string' ? titlePage.showReference(title) : titlePage.show(title);
@@ -116,7 +120,7 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
     typeahead.submit(query);
   }
 
-  globalThis.addEventListener?.('online', () => draw());
+  globalThis.addEventListener?.('online', () => { syncDegradation(); draw(); });
   globalThis.addEventListener?.('offline', () => draw());
 
   const openSettings = () => {
@@ -140,6 +144,21 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
 
   // The second source decides the mode: with a TMDB key alone, languages are unavailable and the page says so.
   function syncBanners() {
+    syncMode();
+    syncDegradation();
+  }
+
+  // Quota and source failures. The list is replaced only when it changes, so focus survives.
+  function syncDegradation() {
+    const quota = settings.hasKey('sa') ? app.quota?.status() ?? null : null;
+    const next = settings.hasKey('tmdb') ? degradationBanners({ quota, snapshots: titleSources }) : [];
+    const { banners } = store.get();
+    const current = banners.filter(({ type }) => DEGRADATION_TYPES.has(type));
+    if (JSON.stringify(current) === JSON.stringify(next)) return;
+    store.set({ banners: [...next, ...banners.filter(({ type }) => !DEGRADATION_TYPES.has(type))] });
+  }
+
+  function syncMode() {
     const mode = !settings.hasKey('tmdb') ? 'noKey' : settings.hasKey('sa') ? 'full' : 'tmdbOnly';
     const { mode: previous, banners } = store.get();
     if (previous === mode) return;
@@ -187,6 +206,7 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
         sources: app.sources,
         onCountryChange: () => titlePage?.refresh(),
         quotaLimit: app.quotaLimit,
+        quotaStatus: app.quota?.status,
         durable: app.durable,
         // The first saved key ends the first run: go back to search.
         onChange: () => {

@@ -257,7 +257,42 @@ const countryRefreshScenario = {
   },
 };
 
+function usageScenario(name, used, expected, meterClass) {
+  return {
+    name: `Settings · quota ${name}`,
+    render(container) {
+      const storage = memoryStorage();
+      const quota = createQuota({ storage, now: () => Date.UTC(2026, 10, 23) });
+      for (let call = 0; call < used; call += 1) quota.record();
+      const settings = createSettings({ storage, navigatorLike: { language: 'en-GB' }, cache: createCache({ storage }), quota });
+      container.append(renderSettings({ settings, checkKey: async () => 'valid', quotaStatus: quota.status }));
+    },
+    check(container) {
+      const meter = container.querySelector('.meter');
+      if (!meter) return ['the quota counter is missing'];
+      const problems = checkNoOverflow(container);
+      const line = meter.querySelector('p').textContent;
+      if (!expected.test(line)) problems.push(`unexpected quota line: ${line}`);
+      if (meter.className !== meterClass) problems.push(`the meter classes are "${meter.className}"`);
+      if (Boolean(meter.querySelector('p .icon')) !== (meterClass !== 'meter')) problems.push('the state icon is wrong');
+      if (meter.querySelector('.meter__bar').getAttribute('aria-hidden') !== 'true') problems.push('the bar is not decorative');
+      const track = meter.querySelector('.meter__bar').clientWidth;
+      if (!(track > 0)) return [...problems, 'the bar has no width'];
+      const share = meter.querySelector('.meter__fill').getBoundingClientRect().width / track;
+      if (Math.abs(share - Math.min(1, used / 1000)) > 0.01) problems.push(`the bar shows ${share}`);
+      return problems;
+    },
+  };
+}
+
+const usageScenarios = [
+  usageScenario('normal', 312, /^312 of 1,000 calls used · resets on 1 Dec 2026$/, 'meter'),
+  usageScenario('warning', 812, /812 of 1,000 getting close: languages stop at 1,000 · resets on 1 Dec 2026$/, 'meter meter--caution'),
+  usageScenario('blocked', 1000, /1,000 of 1,000 limit reached: languages paused until 1 Dec 2026$/, 'meter meter--danger'),
+];
+
 const scenarios = [
+  ...usageScenarios,
   countryScenario,
   countryRefreshScenario,
   failedSaveScenario,

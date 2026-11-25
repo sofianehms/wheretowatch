@@ -112,6 +112,7 @@ function notices(verdict, { all = false } = {}) {
     if (note.coverage === 'stale' && note.status !== 'notFound') {
       boxes.push(banner('coverageStale', { source, date: formatDate(new Date(note.coverageFetchedAt)) }));
     }
+    if (note.stale) boxes.push(banner('stale', { source, date: formatDate(new Date(note.fetchedAt)) }));
   }
   return boxes;
 }
