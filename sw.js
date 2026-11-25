@@ -17,7 +17,7 @@ const SHELL = [
 // Loaded on demand (title page, country selector). Cached with the shell so a fresh offline launch finds them,
 // but kept out of the first-load budget, which only counts what the first paint needs.
 const LAZY = [
-  'src/title-page.js', 'src/render/title.js', 'src/render/languages.js', 'src/render/service-picker.js', 'src/render/all-services.js', 'src/render/country.js', 'src/i18n/en/country.js',
+  'src/title-page.js', 'src/render/title.js', 'src/render/languages.js', 'src/render/service-picker.js', 'src/render/all-services.js', 'src/render/service-logo.js', 'src/render/country.js', 'src/i18n/en/country.js',
   'src/styles/title.css', 'src/core/reconcile.js', 'src/core/verdict.js', 'src/api/availability.js', 'src/api/streaming.js',
 ];
 

@@ -2,6 +2,7 @@
 import { homeKind } from '../core/verdict.js';
 import { countryName, formatNumber, t } from '../i18n/strings.js';
 import { el, icon, uniqueId } from './dom.js';
+import { serviceLogo } from './service-logo.js';
 
 const OFFER_TYPES = ['subscription', 'free', 'rent', 'buy'];
 const SOURCES = ['tmdb', 'sa'];
@@ -12,17 +13,21 @@ const sourceName = (id) => t(`verdict.source.${id}`);
  * @param {Map<string, {service: {name: string}}>} reconciledAll Service names by key.
  * @param {{source: string, country: string, key: string, offerType: string}[]} offers Result of `reportedOffers()`.
  * @param {string} home Lowercase country code.
- * @returns {{type: string, services: {name: string, sources: string[]}[]}[]}
+ * @returns {{type: string, services: {name: string, logoPath?: string, sources: string[]}[]}[]}
  */
 export function offersAtHome(reconciledAll, offers, home) {
   const atHome = offers.filter((offer) => offer.country === home);
   const groups = [];
   for (const type of OFFER_TYPES) {
     const ofType = atHome.filter((offer) => offer.offerType === type);
-    const services = [...new Set(ofType.map(({ key }) => key))].map((key) => ({
-      name: reconciledAll.get(key).service.name,
-      sources: SOURCES.filter((id) => ofType.some((offer) => offer.key === key && offer.source === id)),
-    }));
+    const services = [...new Set(ofType.map(({ key }) => key))].map((key) => {
+      const { name, serviceLogoPath } = reconciledAll.get(key).service;
+      return {
+        name,
+        ...(serviceLogoPath && { logoPath: serviceLogoPath }),
+        sources: SOURCES.filter((id) => ofType.some((offer) => offer.key === key && offer.source === id)),
+      };
+    });
     if (services.length > 0) groups.push({ type, services: services.sort((a, b) => a.name.localeCompare(b.name)) });
   }
   return groups;
@@ -30,12 +35,18 @@ export function offersAtHome(reconciledAll, offers, home) {
 
 const count = (n) => t(`title.service.${n === 1 ? 'service' : 'services'}`, { count: formatNumber(n) });
 
-function serviceRow(entry) {
+function serviceRow(entry, imageConfiguration) {
   const item = el('li', 'country country--static');
   const both = entry.sources.length === SOURCES.length;
   const badge = el('span', both ? 'badge badge--confirmed' : 'badge');
   badge.append(icon(both ? 'checkCircle' : 'info', 'sm'), both ? t('title.badge.confirmed') : t('title.badge.only', { source: sourceName(entry.sources[0]) }));
-  item.append(el('span', 'country__name', entry.name), badge);
+  const name = el('span', 'country__name', entry.name);
+  const logo = serviceLogo(entry, imageConfiguration);
+  if (logo) {
+    name.classList.add('service-name');
+    name.prepend(logo);
+  }
+  item.append(name, badge);
   return item;
 }
 
@@ -50,11 +61,11 @@ function headline(kind, ways, where) {
 /**
  * Verdict card and offer groups for the "All services" choice.
  * @param {{reconciledAll: Map<string, object>, offers: object[], home: string|null, kind: string,
- *   coveredCountries: Set<string>, notes: HTMLElement[]}} view `kind` is the title's verdict kind;
+ *   coveredCountries: Set<string>, notes: HTMLElement[], imageConfiguration?: object|null}} view `kind` is the title's verdict kind;
  *   `notes` report what is uncertain about the sources and are shown with the card.
  * @returns {{card: HTMLElement, groups: HTMLElement|null}}
  */
-export function allServicesView({ reconciledAll, offers, home, kind, coveredCountries, notes }) {
+export function allServicesView({ reconciledAll, offers, home, kind, coveredCountries, notes, imageConfiguration }) {
   const id = uniqueId('verdict-head');
   const card = el('section', 'verdict', '', { 'aria-labelledby': id });
   const body = el('div', 'verdict__body');
@@ -86,7 +97,7 @@ export function allServicesView({ reconciledAll, offers, home, kind, coveredCoun
     const head = el('div', 'group__head');
     head.append(el('h2', 'group__title', t(`title.group.${type}`), { id: headId }), el('span', 'group__count', count(services.length)));
     const list = el('ul', 'countries');
-    for (const entry of services) list.append(serviceRow(entry));
+    for (const entry of services) list.append(serviceRow(entry, imageConfiguration));
     section.append(head, list);
     box.append(section);
   }

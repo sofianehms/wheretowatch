@@ -1,3 +1,5 @@
+import { SHOW_SERVICE_LOGOS } from '../data/services.js';
+
 const defaultBase = 'https://image.tmdb.org/t/p/';
 const forbiddenUrlText = /api_key|original/i;
 const posterCandidates = {
@@ -10,6 +12,23 @@ function isSecureBase(value) {
   return /^https:\/\/image\.tmdb\.org\/(?:[\w-]+\/)+$/.test(value) && !forbiddenUrlText.test(value);
 }
 
+const isImagePath = (path) => Boolean(path) && /^\/[\w-]+\.[a-z0-9]+$/i.test(path) && !forbiddenUrlText.test(path);
+
+/**
+ * URL of a service logo at its smallest size, or null when logos are turned off or the path is unusable.
+ * @param {string|null|undefined} path TMDB logo path (`serviceLogoPath`).
+ * @param {{secure_base_url?: string, logo_sizes?: string[]}|null} [configuration]
+ * @param {boolean} [show] Defaults to the build setting that removes every logo.
+ * @returns {string|null}
+ */
+export function serviceLogoUrl(path, configuration, show = SHOW_SERVICE_LOGOS) {
+  if (!show || !isImagePath(path)) return null;
+  const widths = (configuration?.logo_sizes ?? []).filter((size) => /^w\d+$/.test(size));
+  widths.sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+  const configured = widths.length > 0 && isSecureBase(configuration.secure_base_url);
+  return configured ? configuration.secure_base_url + widths[0] + path : `${defaultBase}w45${path}`;
+}
+
 /**
  * Build a poster's src and srcset, optionally using the source's image configuration.
  * @param {string|null} path TMDB poster path.
@@ -18,7 +37,7 @@ function isSecureBase(value) {
  * @returns {{src: string, srcset: string}|null}
  */
 export function posterSrcset(path, variant, configuration) {
-  if (!path || !/^\/[\w-]+\.[a-z0-9]+$/i.test(path) || forbiddenUrlText.test(path)) return null;
+  if (!isImagePath(path)) return null;
   const expected = posterCandidates[variant];
   const available = configuration?.poster_sizes;
   const supported = Array.isArray(available)

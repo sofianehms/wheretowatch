@@ -52,11 +52,18 @@ function checkOrigin(url, report) {
   if (!allowedOrigins.has(requestOrigin)) report(`unauthorized request origin: ${requestOrigin}`);
 }
 
-async function prepareSearchFixtures(ctx, route) {
-  if (route !== statesPath + '?view=search') return;
-  // Serve local artwork for the fictional posters used in the image attribute checks.
-  await ctx.route(/^https:\/\/image\.tmdb\.org\/t\/p\/w\d+\/(?:poster|p[0-7])\.jpg$/, (poster) =>
-    poster.fulfill({ path: 'icons/icon-192.png' }));
+// Fictional artwork named by the state galleries: posters of the search view, service logos of the title view.
+const fixtureImages = {
+  search: /^https:\/\/image\.tmdb\.org\/t\/p\/w\d+\/(?:poster|p[0-7])\.jpg$/,
+  title: /^https:\/\/image\.tmdb\.org\/t\/p\/w45\/logo-\d+\.png$/,
+};
+
+async function prepareImageFixtures(ctx, route) {
+  for (const [view, pattern] of Object.entries(fixtureImages)) {
+    if (route !== `${statesPath}?view=${view}`) continue;
+    // Served from a local file: the checks never depend on the image host.
+    await ctx.route(pattern, (image) => image.fulfill({ path: 'icons/icon-192.png' }));
+  }
 }
 
 async function prepareTheme(ctx, preference) {
@@ -262,7 +269,7 @@ try {
       const report = (problem) => problems.add(problem);
       try {
         ctx.on('request', (request) => checkOrigin(request.url(), report));
-        await prepareSearchFixtures(ctx, route);
+        await prepareImageFixtures(ctx, route);
         await prepareTheme(ctx, preference);
         const page = await ctx.newPage();
         await page.goto(origin + route, { waitUntil: 'networkidle' });
@@ -284,7 +291,7 @@ try {
         const problems = new Set();
         const report = (problem) => problems.add(problem);
         ctx.on('request', (request) => checkOrigin(request.url(), report));
-        await prepareSearchFixtures(ctx, route);
+        await prepareImageFixtures(ctx, route);
         await prepareTheme(ctx, scheme);
         const page = await ctx.newPage();
         page.on('console', (m) => { if (m.type() === 'error') report(`console error: ${m.text()}`); });
