@@ -231,6 +231,34 @@ const closeLanguages = ({ toggle, panel }, name) => {
   return toggle.getAttribute('aria-expanded') === 'false' && panel.hidden ? [] : [`${name} does not close`];
 };
 
+// Offer details: quality and leaving date from the second source. The date is far ahead so it stays upcoming.
+const saOffer = (country, quality, expiresOn, offerType = 'subscription') => ({ ...withLanguages(country, [track('audio', 'eng')]), offerType, quality, expiresOn });
+const offersInput = {
+  coverage: { tmdb: { status: 'fresh', countries: ['jp', 'ca', 'de'] }, sa: { status: 'fresh', countries: ['jp', 'ca', 'de'] } },
+  snapshots: [
+    dated('tmdb', ['jp', 'ca', 'de'].map(tmdbOffer)),
+    dated('sa', [
+      saOffer('jp', 'hd', '2099-12-31T12:00:00Z'),
+      saOffer('jp', 'sd', null, 'rent'),
+      saOffer('jp', 'uhd', null, 'rent'),
+      saOffer('ca', 'uhd', null),
+      saOffer('de', null, null),
+    ]),
+  ],
+};
+function offerScenario(name, country, expected) {
+  return scenario(name, result(offersInput), {
+    verify(container) {
+      const { problems, panel } = openLanguages(container, country);
+      if (!panel) return problems;
+      const lines = [...panel.querySelectorAll('.langs__offers p')].map((node) => node.textContent);
+      if (lines.join('|') !== expected.join('|')) problems.push(`wrong offer lines: "${lines.join('|')}"`);
+      if (/undefined|null|Invalid/.test(panel.textContent)) problems.push('missing data is printed');
+      return [...problems, ...checkFits(container)];
+    },
+  });
+}
+
 // ---- Service picker and "All services" view ----
 const svcOffer = (source, country, serviceName, offerType = 'subscription', serviceId = null) => ({
   source, country, serviceKey: source === 'tmdb' ? `tmdb:${serviceId}` : `sa:${serviceName}`, serviceName, serviceId: source === 'tmdb' ? serviceId : serviceName,
@@ -597,6 +625,9 @@ const scenarios = [
       return problems;
     },
   }),
+  offerScenario('Title · offer details, upcoming expiry', 'Japan', ['Subscription · HD · Leaves on 31 Dec 2099', 'Rent · UHD']),
+  offerScenario('Title · offer details, UHD quality', 'Canada', ['Subscription · UHD']),
+  offerScenario('Title · offer details, missing data', 'Germany', []),
   scenario('Title · languages, subtitles only', result(languagesInput), {
     verify(container) {
       const opened = openLanguages(container, 'Canada');
