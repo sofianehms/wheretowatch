@@ -1,6 +1,11 @@
 // Shared building blocks of the component gallery: DOM helpers, icons and reusable checks.
 import { hoverChanges } from '../states-sim.js';
 
+export const minimumTargetSize = 44;
+// Rectangles are subtracted in single precision: far down a long page, a 44px control can measure 43.99975px.
+const measureError = 0.01;
+export const isUnderTapSize = (size) => size < minimumTargetSize - measureError;
+
 const SVG = 'http://www.w3.org/2000/svg';
 export const icons = {
   check: 'M20 6 9 17l-5-5',
