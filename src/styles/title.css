@@ -149,3 +149,11 @@
 
 /* A title page carries its own h1: the site-name heading of the search view steps aside. */
 #search-view:has(.title-head) > h1.visually-hidden { display: none; }
+
+/* ---------- Diagnostics panel of Settings ---------- */
+.diagnostics h2 { flex: 1 1 auto; }
+.diagnostics__body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); padding: var(--space-3) var(--space-4) 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
+.diagnostics__facts dt { font-weight: var(--weight-bold); color: var(--color-text-strong); }
+.diagnostics__facts dd { margin-bottom: var(--space-2); color: var(--color-text-muted); }
+.diagnostics__errors { display: grid; gap: var(--space-3); }
+.diagnostics__errors code { display: block; color: var(--color-text-muted); }
