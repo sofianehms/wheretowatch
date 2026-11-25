@@ -6,6 +6,16 @@ import { el, icon, uniqueId } from './dom.js';
 // Own strings: the dictionary ships with this module, outside the offline shell.
 const t = (key) => country[key.replace('country.', '')];
 
+// The select and disclosure styles live with the title page styles, which load only when needed (once per page).
+export function loadTitleStyles(doc = document) {
+  const href = new URL('../styles/title.css', import.meta.url).href;
+  if ([...(doc.head?.querySelectorAll('link[rel="stylesheet"]') ?? [])].some((l) => l.href === href)) return;
+  const link = doc.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = href;
+  doc.head?.append(link);
+}
+
 /**
  * @param {object} options
  * @param {ReturnType<typeof import('../settings/keys.js').createSettings>} options.settings
@@ -14,15 +24,7 @@ const t = (key) => country[key.replace('country.', '')];
  * @returns {HTMLElement} The section, with `refresh()` to re-read the active sources (a key was saved or removed).
  */
 export function renderCountry({ settings, sources, onCountryChange }) {
-  const doc = document;
-  // The select styles live with the title page styles, which load only when needed (once per page).
-  const href = new URL('../styles/title.css', import.meta.url).href;
-  if (![...(doc.head?.querySelectorAll('link[rel="stylesheet"]') ?? [])].some((l) => l.href === href)) {
-    const link = doc.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = href;
-    doc.head?.append(link);
-  }
+  loadTitleStyles();
   const countryId = uniqueId('settings-country');
   const selectId = `${countryId}-select`;
   const countryHelpId = `${countryId}-help`;
