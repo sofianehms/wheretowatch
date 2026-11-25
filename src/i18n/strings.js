@@ -37,12 +37,18 @@ export function t(key, params = {}) {
   );
 }
 
-export function formatDate(date) {
+export function formatDate(date, timeZone) {
   return new Intl.DateTimeFormat(dateLocales[locale], {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    timeZone,
   }).format(date);
+}
+
+// Quota cycles start at midnight UTC: a local time zone could name the day before.
+export function formatResetDate(date) {
+  return formatDate(date, 'UTC');
 }
 
 export function formatNumber(value) {

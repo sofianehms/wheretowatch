@@ -31,6 +31,8 @@ export default {
   'banner.coverageUnknown.allText': 'The list of countries covered by {source} is not known, so this list may be incomplete.',
   'banner.coverageStale.title': 'Coverage from an older list',
   'banner.coverageStale.text': 'The countries covered by {source} come from a list retrieved on {date}.',
+  'banner.stale.title': 'Saved data',
+  'banner.stale.text': '{source}: data from {date} (not refreshed).',
   'langs.audio': 'Audio',
   'langs.subtitle': 'Subtitles',
   'langs.none': 'None listed',
