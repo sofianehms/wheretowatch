@@ -4,12 +4,11 @@ import title from './en/title.js';
 import verdict from './en/verdict.js';
 import settings from './en/settings.js';
 import banners from './en/banners.js';
-import about from './en/about.js';
 import install from './en/install.js';
 
 const defaultLocale = 'en';
 const locales = {
-  en: { common, search, title, verdict, settings, banners, about, install },
+  en: { common, search, title, verdict, settings, banners, install },
 };
 const dateLocales = { en: 'en-GB' };
 
