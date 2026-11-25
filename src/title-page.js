@@ -129,5 +129,9 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
     if (shown) present();
   }
 
-  return { show, showReference, clear, refresh, isLoading: () => loading, isUnsaved: () => unsaved };
+  // No source answered, for lack of a network: what is on screen is only that failure.
+  const isCutOff = () => Boolean(shown?.snapshots.every(({ status, error }) =>
+    status === 'unavailable' && ['network', 'offline'].includes(error?.type)));
+
+  return { show, showReference, clear, refresh, isLoading: () => loading, isUnsaved: () => unsaved, isCutOff };
 }

@@ -79,6 +79,8 @@ export function startApp(app, root = document, {
         entries,
         settings: app.settings,
         onChoose: (title) => {
+          // The user moved on: a query still waiting for the network must not open over this title.
+          pendingLaunch = null;
           showTitle(title);
           offlineSlot.querySelector('button')?.focus();
         },
@@ -146,10 +148,12 @@ export function startApp(app, root = document, {
   function loadImageConfiguration() {
     if (!connected || imageRequested || !app.imageConfiguration) return;
     imageRequested = true;
+    // A request that failed, with the network for instance, is made again at the next occasion.
     Promise.resolve(app.imageConfiguration()).then((configuration) => {
       imageConfiguration = configuration ?? null;
+      imageRequested = imageConfiguration !== null;
       draw();
-    }, () => {});
+    }, () => { imageRequested = false; });
   }
 
   function runLaunch() {
@@ -160,6 +164,8 @@ export function startApp(app, root = document, {
       showTitle(ref).finally(onTitleLaunchComplete);
       return;
     }
+    // A query waits for the network: searched without it, it would only leave an error behind.
+    if (!connected) return;
     const query = pendingLaunch;
     pendingLaunch = null;
     if (query === null) return;
@@ -170,11 +176,17 @@ export function startApp(app, root = document, {
   function setOnline(next) {
     connected = next;
     syncBanners();
+    // Search work belongs to the connection it started on.
+    if (!next) typeahead.stop();
     draw();
-    // A title still loading is read from the saved data instead; one that was not saved is loaded again.
-    if (pendingTitle !== null && (next ? titlePage?.isUnsaved() : titlePage?.isLoading())) showTitle(pendingTitle);
+    // A title still loading starts over on the new connection (from the saved data when it is lost).
+    // Back online, so does one that was not saved or that the network failed.
+    if (pendingTitle !== null && (titlePage?.isLoading() || (next && (titlePage?.isUnsaved() || titlePage?.isCutOff())))) showTitle(pendingTitle);
     else syncOffline();
-    if (next && shown === 'search') loadImageConfiguration();
+    if (next && shown === 'search') {
+      loadImageConfiguration();
+      runLaunch();
+    }
   }
 
   const openSettings = () => {

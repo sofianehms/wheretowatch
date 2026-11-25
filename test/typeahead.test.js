@@ -219,3 +219,21 @@ test('submit starts immediately, replaces pending input and respects the configu
   tick(1000);
   assert.equal(calls.length, 1);
 });
+
+test('stop drops the queued, running and composed search, and later input works', (t) => {
+  const { input, submit, compositionStart, stop, tick, calls, states } = setup(t);
+  input('ab');
+  stop();
+  tick(1000);
+  assert.equal(calls.length, 0);
+  submit('cd');
+  stop();
+  assert.equal(calls[0].signal.aborted, true);
+  assert.deepEqual(states.at(-1), { status: 'idle' });
+  // A composition whose end is never reported does not block the field.
+  compositionStart();
+  stop();
+  input('cd');
+  tick(1000);
+  assert.deepEqual(calls.map((call) => call.query), ['cd', 'cd']);
+});

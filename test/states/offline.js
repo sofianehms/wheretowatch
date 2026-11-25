@@ -35,7 +35,9 @@ function save(cache, { id, name, countries, date }) {
 }
 
 // The real shell and the real cached reads; the one source refuses every request.
-function mount(container, titles, { online = false, launchTitle = null } = {}) {
+function mount(container, titles, {
+  online = false, launchTitle = null, launchQuery = null, searchTitles, getAvailability, imageConfiguration,
+} = {}) {
   container.innerHTML = '<div id="header"></div><div id="welcome" hidden></div><div id="settings" hidden></div>'
     + '<section id="search-view" hidden><div id="banners"></div><div id="search"></div><div id="offline"></div><div id="title"></div></section>';
   const storage = memoryStorage({ 'wtw.key.tmdb': 'sample-tmdb-key', 'wtw.pref.country': 'fr' });
@@ -51,19 +53,46 @@ function mount(container, titles, { online = false, launchTitle = null } = {}) {
     cache,
     sources: [{
       id: 'tmdb', capabilities: { search: true, availability: true, languages: false },
-      searchTitles: refuse('search'), getAvailability: refuse('availability'), listCoveredCountries: refuse('coverage'),
+      searchTitles: searchTitles ?? refuse('search'), getAvailability: getAvailability ?? refuse('availability'),
+      listCoveredCountries: refuse('coverage'),
     }],
   });
   const settings = createSettings({ storage, navigatorLike: { language: 'fr-FR' }, cache });
   const store = createStore();
   const app = startApp({
-    store, settings, sources, getTitle: refuse('title'), imageConfiguration: refuse('images'), durable: true,
-  }, container, { online, launchTitle });
+    store, settings, sources, getTitle: refuse('title'), imageConfiguration: imageConfiguration ?? refuse('images'), durable: true,
+  }, container, { online, launchTitle, launchQuery });
   return { app, store, requests };
 }
 
 async function until(test) {
   for (let turn = 0; turn < 200 && !test(); turn += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+}
+
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Longer than the typing delay of the search.
+const afterDebounce = () => pause(500);
+
+function type(container, value) {
+  const field = container.querySelector('#search input');
+  field.focus();
+  field.value = value;
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// Back online and back in the field: nothing from before the cut may show up.
+function untouchedSearch(container) {
+  const problems = [];
+  const field = container.querySelector('#search input');
+  field.blur();
+  field.focus();
+  const text = container.querySelector('#search').textContent;
+  if (field.disabled || field.value !== '') problems.push('the field is not empty and enabled');
+  if (/Search failed|Searching/.test(text)) problems.push(`a search from before the cut is back: ${text}`);
+  if (field.getAttribute('aria-expanded') === 'true') problems.push('the suggestions open again');
+  if (container.mounted.store.get().searchStatus !== 'idle') problems.push('the search state is not idle');
+  field.blur();
+  return problems;
 }
 
 function offlineShell(container) {
@@ -159,5 +188,98 @@ export default [
       if (container.mounted.store.get().mode !== 'tmdbOnly') problems.push('the mode is not restored');
       return problems;
     },
+  },
+  {
+    name: 'Offline · network back after a search still queued',
+    async render(container) {
+      const searched = [];
+      container.mounted = mount(container, viewed, { online: true, searchTitles: async (query) => { searched.push(query); return []; } });
+      type(container, 'ab');
+      container.mounted.app.setOnline(false);
+      await afterDebounce();
+      container.mounted.app.setOnline(true);
+      container.problems = untouchedSearch(container);
+      if (searched.length) container.problems.push('the queued search still ran');
+      // The next search works.
+      type(container, 'cd');
+      await afterDebounce();
+      if (searched.join() !== 'cd') container.problems.push(`unexpected searches: ${searched.join()}`);
+      container.querySelector('#search input').blur();
+    },
+    check: (container) => container.problems,
+  },
+  {
+    name: 'Offline · network back after a search in flight or failed',
+    async render(container) {
+      let signal;
+      let fail;
+      container.mounted = mount(container, viewed, {
+        online: true,
+        searchTitles: (query, options) => new Promise((resolve, reject) => { signal = options.signal; fail = reject; }),
+      });
+      type(container, 'ab');
+      await until(() => signal);
+      container.mounted.app.setOnline(false);
+      container.problems = signal.aborted ? [] : ['the running search is not cancelled'];
+      fail(new Error('cut'));
+      await pause(20);
+      container.mounted.app.setOnline(true);
+      container.problems.push(...untouchedSearch(container));
+      // An error already on screen is dropped by the cut as well.
+      signal = undefined;
+      type(container, 'ef');
+      await until(() => signal);
+      fail(new Error('cut'));
+      await until(() => /Search failed/.test(container.querySelector('#search').textContent));
+      container.mounted.app.setOnline(false);
+      container.mounted.app.setOnline(true);
+      container.problems.push(...untouchedSearch(container));
+    },
+    check: (container) => container.problems,
+  },
+  {
+    name: 'Offline · a query from the address waits for the network',
+    async render(container) {
+      const searched = [];
+      let pictures = 0;
+      container.mounted = mount(container, viewed, {
+        launchQuery: 'harbour',
+        searchTitles: async (query) => { searched.push(query); return []; },
+        // The first request for the picture settings fails, as with a connection that drops again.
+        imageConfiguration: async () => { pictures += 1; return null; },
+      });
+      await pause(50);
+      container.problems = searched.length ? ['searched without a network'] : [];
+      container.mounted.app.setOnline(true);
+      await until(() => searched.length);
+      await pause(20);
+      if (searched.join() !== 'harbour') container.problems.push(`unexpected searches: ${searched.join()}`);
+      container.mounted.app.setOnline(false);
+      container.mounted.app.setOnline(true);
+      if (searched.length !== 1) container.problems.push('the query from the address ran twice');
+      if (pictures !== 2) container.problems.push(`the picture settings were requested ${pictures} times instead of 2`);
+    },
+    check: (container) => container.problems,
+  },
+  {
+    name: 'Offline · network back after a title the network failed',
+    async render(container) {
+      let calls = 0;
+      container.mounted = mount(container, [], {
+        online: true,
+        launchTitle: 'movie/99',
+        getAvailability: async () => { calls += 1; throw new Error('cut'); },
+      });
+      // A direct link resolves its title first: here that request fails with the network.
+      await until(() => container.querySelector('#title .verdict'));
+      await pause(50);
+      const before = container.mounted.requests.filter((name) => name === 'title').length;
+      container.mounted.app.setOnline(false);
+      container.mounted.app.setOnline(true);
+      await pause(100);
+      const after = container.mounted.requests.filter((name) => name === 'title').length;
+      container.problems = after === before + 1 && calls === 0 ? [] : [`the failed title was requested ${after - before} more times instead of once`];
+    },
+    check: (container) => container.problems,
   },
 ];
