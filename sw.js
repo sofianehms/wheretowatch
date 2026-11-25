@@ -1,10 +1,10 @@
 // Minimal offline shell cache. A new worker waits and activates on the next launch. Bump CACHE when shipped files change.
-const CACHE = 'shell-v24';
+const CACHE = 'shell-v25';
 const SHELL = [
   './', 'index.html', 'design/tokens.css', 'src/styles.css',
   'src/styles/search.css', 'src/styles/settings.css', 'src/styles/banners.css', 'src/styles/about.css', 'src/styles/install.css', 'src/styles/footer.css',
   'src/theme-boot.js', 'src/theme.js', 'src/main.js', 'src/app.js', 'src/compose.js', 'src/state.js',
-  'manifest.webmanifest', 'src/api/cache.js', 'src/api/http.js', 'src/api/keycheck.js', 'src/api/quota.js',
+  'manifest.webmanifest', 'src/api/cache.js', 'src/api/diagnostics.js', 'src/api/http.js', 'src/api/keycheck.js', 'src/api/quota.js',
   'src/api/sources.js', 'src/config.js', 'src/settings/keys.js', 'src/core/images.js', 'src/core/typeahead.js', 'src/core/url.js', 'src/api/tmdb.js',
   'src/core/normalize.js', 'src/data/services.js',
   'src/render/dom.js', 'src/render/banners.js', 'src/render/header.js', 'src/render/attribution.js', 'src/render/search.js', 'src/render/settings.js', 'src/render/welcome.js',
@@ -17,7 +17,7 @@ const SHELL = [
 // Loaded on demand (title page, country selector). Cached with the shell so a fresh offline launch finds them,
 // but kept out of the first-load budget, which only counts what the first paint needs.
 const LAZY = [
-  'src/title-page.js', 'src/render/title.js', 'src/render/languages.js', 'src/render/service-picker.js', 'src/render/all-services.js', 'src/render/service-logo.js', 'src/render/country.js', 'src/i18n/en/country.js',
+  'src/title-page.js', 'src/render/title.js', 'src/render/languages.js', 'src/render/service-picker.js', 'src/render/all-services.js', 'src/render/service-logo.js', 'src/render/country.js', 'src/i18n/en/country.js', 'src/render/diagnostics.js', 'src/i18n/en/diagnostics.js',
   'src/styles/title.css', 'src/core/reconcile.js', 'src/core/verdict.js', 'src/api/availability.js', 'src/api/streaming.js',
 ];
 

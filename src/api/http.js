@@ -1,3 +1,5 @@
+import { recordError } from './diagnostics.js';
+
 const MAX_WAIT_MS = 10_000;
 
 const messages = {
@@ -95,8 +97,18 @@ function failureType(status) {
  * The retry wait is capped separately. Set retryOn429 to 'within-budget'
  * to surface the rate-limit error when Retry-After exceeds that cap.
  * An injected sleep(ms, signal) waits in milliseconds and should stop on abort.
+ * Failures are reported to the diagnostics buffer; cancellations are not failures.
  */
-export async function request(url, {
+export async function request(url, options) {
+  try {
+    return await send(url, options);
+  } catch (error) {
+    if (error.type !== 'aborted') recordError({ type: error.type, url });
+    throw error;
+  }
+}
+
+async function send(url, {
   headers, signal, timeoutMs = MAX_WAIT_MS, retryOn429 = false,
   fetchImpl = globalThis.fetch, sleep = delay, onResponse, redirect,
 } = {}) {
