@@ -103,6 +103,8 @@
 }
 @keyframes fade { from { opacity: 0; } }
 .langs[hidden] { display: none; }
+.langs__offers { display: grid; gap: var(--space-1); color: var(--color-text-muted); overflow-wrap: anywhere; }
+.langs__offers strong { color: var(--color-text-strong); }
 .langs__note { color: var(--color-text-muted); overflow-wrap: anywhere; }
 .langs__none { color: var(--color-text-muted); }
 .langs li { min-width: 0; overflow-wrap: anywhere; }
