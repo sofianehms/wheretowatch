@@ -1,8 +1,11 @@
-// Per-country disclosure: audio and subtitle languages, shown on demand. Text always comes from `t()`.
-import { languageName, t } from '../i18n/strings.js';
+// Per-country disclosure: offer quality and expiry, audio and subtitle languages, shown on demand. Text always comes from `t()`.
+import { formatDate, languageName, t } from '../i18n/strings.js';
 import { el, icon, uniqueId } from './dom.js';
 
 const KINDS = ['audio', 'subtitle'];
+const OFFER_TYPES = ['subscription', 'free', 'rent', 'buy'];
+// Ascending, so the index ranks them.
+const QUALITIES = ['sd', 'hd', 'qhd', 'uhd'];
 
 const baseName = ({ language, region }) => languageName(region ? `${language}-${region}` : language);
 
@@ -19,6 +22,44 @@ function tracksOf(row) {
     .filter(({ track }) => track.kind === kind)
     .sort((a, b) => a.name.localeCompare(b.name) || Number(a.track.closedCaptions) - Number(b.track.closedCaptions))
     .map(({ track, name }) => ({ closedCaptions: track.closedCaptions, label: track.closedCaptions ? t('title.langs.sdh', { language: name }) : name }))]));
+}
+
+/**
+ * What the second source says about each offer of one country: its type, quality and leaving date.
+ * Each offer keeps its own quality and date together; only offers that would read the same share a line.
+ * A date already past (saved data) is dropped, and an offer with nothing to add is omitted.
+ * @param {{offers: {sa?: {offerType: string, quality: string|null, expiresOn: string|null}[]}}} row
+ * @param {number} [now] Timestamp in milliseconds.
+ * @returns {{type: string, quality: string|null, leaves: string|null}[]} By offer type, soonest date first (undated last),
+ *   then best quality first.
+ */
+export function offerDetails(row, now = Date.now()) {
+  const lines = new Map();
+  for (const offer of row.offers.sa ?? []) {
+    const time = Date.parse(offer.expiresOn);
+    const expiry = time > now ? time : Infinity;
+    const leaves = expiry === Infinity ? null : formatDate(new Date(expiry));
+    const quality = QUALITIES.includes(offer.quality) ? offer.quality : null;
+    if (quality || leaves) lines.set(`${offer.offerType}|${quality}|${leaves}`, { type: offer.offerType, quality, expiry, leaves });
+  }
+  return [...lines.values()]
+    .sort((a, b) => OFFER_TYPES.indexOf(a.type) - OFFER_TYPES.indexOf(b.type)
+      || (a.expiry === b.expiry ? 0 : a.expiry < b.expiry ? -1 : 1)
+      || QUALITIES.indexOf(b.quality) - QUALITIES.indexOf(a.quality))
+    .map(({ type, quality, leaves }) => ({ type, quality, leaves }));
+}
+
+function offersBlock(row) {
+  const details = offerDetails(row);
+  if (details.length === 0) return [];
+  const block = el('div', 'langs__offers');
+  for (const { type, quality, leaves } of details) {
+    const line = el('p');
+    const facts = [quality && t(`title.quality.${quality}`), leaves && t('title.offer.leaves', { date: leaves })].filter(Boolean);
+    line.append(el('strong', '', t(`title.offer.${type}`)), ` · ${facts.join(' · ')}`);
+    block.append(line);
+  }
+  return [block];
 }
 
 function panelBody(row, saCovered) {
@@ -45,7 +86,7 @@ function panelBody(row, saCovered) {
 }
 
 /**
- * One country row whose languages open on demand.
+ * One country row whose offer details and languages open on demand.
  * @param {{country: string, state: string, offers: {sa: object[]}}} row
  * @param {{name: HTMLElement, badge: HTMLElement|null, saCovered?: boolean|null}} parts Name and optional source badge of the row;
  *   `saCovered` tells whether the second source's coverage list holds the country (null when that list is unknown).
@@ -60,7 +101,7 @@ export function languageRow(row, { name, badge, saCovered = null }) {
   if (badge) toggle.append(badge);
   toggle.append(chevron);
   const panel = el('div', 'langs', '', { id, hidden: '' });
-  panel.append(...panelBody(row, saCovered));
+  panel.append(...offersBlock(row), ...panelBody(row, saCovered));
   toggle.addEventListener('click', () => {
     const open = toggle.getAttribute('aria-expanded') !== 'true';
     toggle.setAttribute('aria-expanded', String(open));
