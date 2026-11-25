@@ -49,13 +49,19 @@ function mountApp(container, stored, { used = 0, snapshots } = {}) {
   for (let call = 0; call < used; call += 1) quota.record();
   const settings = createSettings({ storage, navigatorLike: { language: 'en-GB' }, cache: createCache({ storage }), quota });
   const store = createStore();
+  let loads = 0;
   const title = { mediaType: 'movie', tmdbId: 11, imdbId: null, title: 'Harbour Lights', year: 2023, posterPath: null, ref: 'movie/11' };
-  const sources = snapshots && { loadAvailability: async () => ({ ...disagreement, snapshots }) };
+  const sources = snapshots && {
+    loadAvailability: async () => {
+      loads += 1;
+      return { ...disagreement, snapshots };
+    },
+  };
   startApp({
     store, settings, quota, sources, getTitle: async () => title,
     checkKey: async () => 'valid', quotaLimit: () => quota.status().limit, durable: true,
   }, container, { launchTitle: snapshots ? title.ref : null });
-  return { store, settings };
+  return { store, settings, loads: () => loads };
 }
 
 const bothKeys = { 'wtw.key.tmdb': 'sample-tmdb-key', 'wtw.key.sa': 'sample-sa-key' };
@@ -135,6 +141,40 @@ const degradationScenarios = [
       return problems;
     },
   },
+  ...[
+    ['tested', (field) => field.button('Test')],
+    ['replaced', (field) => { field.type('another-sa-key'); field.button('Save'); }],
+    ['removed', (field) => { field.type(''); field.button('Save'); }],
+  ].map(([change, act]) => ({
+    name: `Banner · in the app, source error stays while its result is shown, second key ${change}`,
+    async render(container) {
+      container.mounted = mountApp(container, bothKeys, { snapshots: failedSnapshots });
+      await until(() => container.querySelector('#banners .banner'));
+      container.querySelector('.banner__actions button')?.click();
+      container.querySelector('#header button[aria-label="Settings"]')?.click();
+      const input = container.querySelectorAll('#settings input[type="password"]')[1];
+      const buttons = (name) => [...container.querySelectorAll('#settings button')].filter((node) => node.textContent === name)[1];
+      act({
+        type(value) {
+          input.value = value;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        },
+        button: (name) => buttons(name).click(),
+      });
+      await settle();
+      await settle();
+      container.querySelector('#header button[aria-label="Back to search"]')?.click();
+      await settle();
+    },
+    check(container) {
+      const text = container.querySelector('#banners').textContent;
+      const problems = checkNoOverflow(container.querySelector('#banners'));
+      if (!/Second source unavailable/.test(text)) problems.push(`the source error is gone: ${text}`);
+      if (!container.querySelector('#title').textContent.includes('Harbour Lights')) problems.push('the result is gone');
+      if (container.mounted.loads() !== 1) problems.push(`${container.mounted.loads()} availability loads, expected 1`);
+      return problems;
+    },
+  })),
   {
     name: 'Banner · in the app, quota reached before any title',
     render(container) {

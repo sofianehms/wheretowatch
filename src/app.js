@@ -44,7 +44,8 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
   // The title page needs the network: its code and styles load on the first choice, outside the offline shell.
   let titlePage = null;
   let pendingTitle = null;
-  // The answers of the title on screen, which the failure banners describe.
+  // The answers of the title on screen, which the failure banners describe. Only the title page sets them:
+  // a key tested, saved or removed leaves the result, and so its notice, until a new answer replaces it.
   let titleSources = null;
   const clearTitle = () => {
     pendingTitle = null;
@@ -208,9 +209,7 @@ export function startApp(app, root = document, { launchQuery = null, launchTitle
         quotaStatus: app.quota?.status,
         durable: app.durable,
         // The first saved key ends the first run: go back to search.
-        onChange: (provider) => {
-          // Failures seen with the previous key no longer describe the new one.
-          if (provider === 'sa') titleSources = titleSources?.filter(({ source }) => source !== 'sa') ?? null;
+        onChange: () => {
           // An unverified key stays on screen so the user can read the outcome and test again.
           // Nor does the screen close while the other key is still being checked (leaving would cancel that save)
           // or while the erasure confirmation waits for the user's decision.

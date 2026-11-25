@@ -276,7 +276,9 @@ function usageScenario(name, used, expected, meterClass) {
       if (meter.className !== meterClass) problems.push(`the meter classes are "${meter.className}"`);
       if (Boolean(meter.querySelector('p .icon')) !== (meterClass !== 'meter')) problems.push('the state icon is wrong');
       if (meter.querySelector('.meter__bar').getAttribute('aria-hidden') !== 'true') problems.push('the bar is not decorative');
-      const share = meter.querySelector('.meter__fill').getBoundingClientRect().width / meter.querySelector('.meter__bar').clientWidth;
+      const track = meter.querySelector('.meter__bar').clientWidth;
+      if (!(track > 0)) return [...problems, 'the bar has no width'];
+      const share = meter.querySelector('.meter__fill').getBoundingClientRect().width / track;
       if (Math.abs(share - Math.min(1, used / 1000)) > 0.01) problems.push(`the bar shows ${share}`);
       return problems;
     },

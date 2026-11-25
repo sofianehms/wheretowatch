@@ -70,7 +70,8 @@ export function degradationBanners({ quota = null, snapshots = null }) {
   const answered = Boolean(tmdb) && tmdb.status !== 'unavailable';
   return [
     quota && quotaBanner(quota, sa, answered),
-    answered && sourceErrorBanner(tmdb, quota ? sa : null, Boolean(quota?.blocked)),
+    // The answers of the title on screen stay described even if the key has since been removed.
+    answered && sourceErrorBanner(tmdb, sa, Boolean(quota?.blocked)),
   ].filter(Boolean);
 }
 

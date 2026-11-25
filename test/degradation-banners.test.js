@@ -53,3 +53,8 @@ test('no failure banner for healthy, unknown, cancelled or fully failed answers'
   ];
   for (const snapshots of cases) assert.deepEqual(types({ quota: quota(10), snapshots }), []);
 });
+
+test('the failure of the answers on screen is still announced once the second key is gone', () => {
+  assert.equal(only({ quota: null, snapshots: [answer('tmdb'), failed('sa', 'server')] }).title, 'Second source unavailable');
+  assert.match(only({ snapshots: [answer('tmdb'), answer('sa', { stale: true, reason: 'error' })] }).message, /not refreshed/);
+});
