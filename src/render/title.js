@@ -355,7 +355,7 @@ const controllers = new WeakMap();
  * Render the title page into `container`. The announcement region persists between renders, so
  * a new verdict is read out once it replaces the loading text.
  * @param {HTMLElement} container
- * @param {{status: 'details'|'loading'|'missing'|'result', title: import('../api/sources.js').Title,
+ * @param {{status: 'details'|'loading'|'missing'|'unsaved'|'result', title: import('../api/sources.js').Title,
  *   verdict?: ReturnType<typeof import('../core/verdict.js').computeVerdict>,
  *   reconciled?: ReturnType<typeof import('../core/reconcile.js').reconcile>,
  *   imageConfiguration?: object|null,
@@ -390,8 +390,8 @@ export function renderTitle(container, state, handlers = {}) {
     parts.rest.replaceChildren(skeleton);
     return parts;
   }
-  if (status === 'missing') {
-    parts.live.replaceChildren(el('p', 'verdict', t('title.direct.missing')));
+  if (status === 'missing' || status === 'unsaved') {
+    parts.live.replaceChildren(el('p', 'verdict', t(status === 'missing' ? 'title.direct.missing' : 'title.unsaved')));
     parts.rest.replaceChildren();
     return parts;
   }

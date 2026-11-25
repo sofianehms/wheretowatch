@@ -3,6 +3,8 @@ export default {
   'tmdbOnly.text': 'Add a free Streaming Availability key to see audio and subtitles per country.',
   'tmdbOnly.action': 'Add key',
   'dismiss': 'Dismiss',
+  'offline.title': 'You’re offline',
+  'offline.text': 'Search needs a connection. Titles you viewed stay readable below.',
   'quotaWarning.title': '{used} of {limit} monthly calls used',
   'quotaWarning.text': 'Second source (languages). Resets on {date}.',
   'quotaWarning.action': 'Details',

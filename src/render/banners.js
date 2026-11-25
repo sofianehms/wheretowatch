@@ -12,6 +12,14 @@ export const tmdbOnlyBanner = () => ({
   action: { label: t('banners.tmdbOnly.action'), name: 'settings' },
 });
 
+export const offlineBanner = () => ({
+  type: 'offline',
+  tone: 'caution',
+  icon: 'offline',
+  title: t('banners.offline.title'),
+  message: t('banners.offline.text'),
+});
+
 export const DEGRADATION_TYPES = new Set(['quotaReached', 'quotaWarning', 'sourceError']);
 
 const caution = (type, title, message, extra) => ({ type, tone: 'caution', title, message, ...extra });
