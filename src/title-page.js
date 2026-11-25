@@ -7,11 +7,24 @@ import { t } from './i18n/strings.js';
 import { servicesState } from './render/service-picker.js';
 import { renderTitle } from './render/title.js';
 
+/** The verdict on loaded data for the preferred service and country. Never makes a request. */
+export function assessTitle({ snapshots, coverage, mediaType }, settings) {
+  const homeCountry = settings.getPref('country');
+  const services = servicesState({ snapshots, coverage }, settings.getPref('service'), homeCountry);
+  // "All services" still reads the sources' state through the default service's verdict.
+  const serviceKey = services.all ? DEFAULT_SERVICE : services.selected;
+  const reconciled = reconcile({ snapshots, coverage, serviceKey, aliases: services.aliases });
+  const verdict = computeVerdict({ reconciled, snapshots, serviceKey, aliases: services.aliases, homeCountry, mediaType });
+  return { services, reconciled, verdict };
+}
+
 /**
  * @param {{app: ReturnType<typeof import('./compose.js').compose>, slot: HTMLElement, root: ParentNode,
- *   imageConfiguration: () => object|null, onCheckKeys: () => void, onSources?: (snapshots: object[]|null) => void}} options
+ *   imageConfiguration: () => object|null, onCheckKeys: () => void, onSources?: (snapshots: object[]|null) => void,
+ *   isOnline?: () => boolean}} options
+ *   Offline, a title is read from the saved data alone.
  */
-export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKeys, onSources = () => {} }) {
+export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKeys, onSources = () => {}, isOnline = () => true }) {
   const doc = root.ownerDocument ?? root;
   const link = doc.createElement('link');
   link.rel = 'stylesheet';
@@ -21,16 +34,13 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
   let run = null;
   // What the page shows, kept so a changed preference redraws without a new request.
   let shown = null;
+  let loading = false;
+  let unsaved = false;
 
   function present() {
     const { title, snapshots, coverage, retry } = shown;
     // Everything below comes from the data already loaded: changing the service never makes a request.
-    const homeCountry = app.settings.getPref('country');
-    const services = servicesState({ snapshots, coverage }, app.settings.getPref('service'), homeCountry);
-    // "All services" still reads the sources' state through the default service's verdict.
-    const serviceKey = services.all ? DEFAULT_SERVICE : services.selected;
-    const reconciled = reconcile({ snapshots, coverage, serviceKey, aliases: services.aliases });
-    const verdict = computeVerdict({ reconciled, snapshots, serviceKey, aliases: services.aliases, homeCountry, mediaType: title.mediaType });
+    const { services, reconciled, verdict } = assessTitle({ snapshots, coverage, mediaType: title.mediaType }, app.settings);
     renderTitle(slot, { status: 'result', title, verdict, reconciled, imageConfiguration: imageConfiguration(), services }, {
       onRetry: retry, onCheckKeys, onServiceChange: changeService,
     });
@@ -47,6 +57,7 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
     run?.abort();
     run = null;
     shown = null;
+    loading = unsaved = false;
     slot.replaceChildren();
     onSources(null);
   }
@@ -57,10 +68,13 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
     onSources(null);
     const current = new AbortController();
     run = current;
+    loading = true;
+    unsaved = false;
     const renderLoading = (status) => renderTitle(slot, { status, title, imageConfiguration: imageConfiguration() });
     const retry = () => ref === null ? show(title) : showReference(ref);
     let resolving = ref !== null;
     let loaded;
+    if (!isOnline()) return showSaved(title, ref ?? title.ref, current, retry);
     try {
       if (ref !== null) {
         renderLoading('details');
@@ -73,6 +87,7 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
     } catch (error) {
       if (current.signal.aborted) return;
       if (resolving && error?.type === 'notFound') {
+        loading = false;
         renderLoading('missing');
         return;
       }
@@ -85,9 +100,23 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
       };
     }
     if (current.signal.aborted) return;
+    loading = false;
     shown = { title, snapshots: loaded.snapshots, coverage: loaded.coverage, retry };
     present();
     onSources(loaded.snapshots);
+  }
+
+  async function showSaved(title, ref, current, retry) {
+    const saved = ref ? await app.sources.readCachedTitle(ref) : null;
+    if (current.signal.aborted) return;
+    loading = false;
+    if (!saved) {
+      unsaved = true;
+      renderTitle(slot, { status: 'unsaved', title });
+      return;
+    }
+    shown = { title: saved.title, snapshots: saved.snapshots, coverage: saved.coverage, retry };
+    present();
   }
 
   function showReference(ref) {
@@ -100,5 +129,5 @@ export function createTitlePage({ app, slot, root, imageConfiguration, onCheckKe
     if (shown) present();
   }
 
-  return { show, showReference, clear, refresh };
+  return { show, showReference, clear, refresh, isLoading: () => loading, isUnsaved: () => unsaved };
 }

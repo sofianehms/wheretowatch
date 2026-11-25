@@ -9,7 +9,8 @@
     { "path": "/test/states.html?view=title", "lighthouse": false },
     { "path": "/test/states.html?view=settings", "lighthouse": false },
     { "path": "/test/states.html?view=banners", "lighthouse": false },
-    { "path": "/test/states.html?view=install", "lighthouse": false }
+    { "path": "/test/states.html?view=install", "lighthouse": false },
+    { "path": "/test/states.html?view=offline", "lighthouse": false }
   ],
   "viewports": [
     { "name": "mobile", "width": 390, "height": 844, "mobile": true },

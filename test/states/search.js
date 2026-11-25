@@ -196,6 +196,7 @@ const scenarios = [
   scenario('Search · offline', { status: 'idle', online: false }, {}, (container) => {
     const problems = [];
     if (!container.querySelector('input').disabled) problems.push('the field is not disabled offline');
+    if (container.querySelector('input').placeholder !== 'Connection required') problems.push('the field does not give the reason');
     if (!container.textContent.includes('Connection required')) problems.push('the offline message is missing');
     if (live(container) !== 'Connection required') problems.push('the offline state is not announced');
     return problems;
@@ -313,7 +314,7 @@ export function check() {
   if (modes[0] !== 'eager' || modes.at(-1) !== 'lazy') problems.push(`posters in later rows are not lazy-loaded (${modes.join(', ')})`);
   many.remove();
 
-  // Tab during loading must not let late suggestions open; going offline keeps the notice visible.
+  // Tab during loading must not let late suggestions open; going offline empties the field to show the reason.
   const flow = document.createElement('div');
   document.body.append(flow);
   render(flow, { status: 'loading', query: 'harb' }, handlers());
@@ -326,7 +327,7 @@ export function check() {
   field.focus();
   render(flow, { status: 'idle', online: false }, handlers());
   field.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
-  if (flow.querySelector('.listbox:not(ul)').hidden) problems.push('the offline notice is hidden after the field is disabled');
+  if (field.value !== '' || field.placeholder !== 'Connection required') problems.push('the offline reason is not shown in the field');
   flow.remove();
   if (container.querySelectorAll('[role="option"]').length !== 8) problems.push('the timing sample did not render 8 suggestions');
   if (elapsed > 100) problems.push(`rendering 8 suggestions took ${Math.round(elapsed)} ms (over 100 ms)`);
