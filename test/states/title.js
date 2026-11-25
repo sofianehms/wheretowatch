@@ -231,14 +231,15 @@ const closeLanguages = ({ toggle, panel }, name) => {
   return toggle.getAttribute('aria-expanded') === 'false' && panel.hidden ? [] : [`${name} does not close`];
 };
 
-// Offer details: quality and leaving date from the second source. The date is far ahead so it stays upcoming.
+// Offer details: quality and leaving date from the second source. The date is far ahead so it stays upcoming,
+// at local noon so the displayed day is the same in every time zone.
 const saOffer = (country, quality, expiresOn, offerType = 'subscription') => ({ ...withLanguages(country, [track('audio', 'eng')]), offerType, quality, expiresOn });
 const offersInput = {
   coverage: { tmdb: { status: 'fresh', countries: ['jp', 'ca', 'de'] }, sa: { status: 'fresh', countries: ['jp', 'ca', 'de'] } },
   snapshots: [
     dated('tmdb', ['jp', 'ca', 'de'].map(tmdbOffer)),
     dated('sa', [
-      saOffer('jp', 'hd', '2099-12-31T12:00:00Z'),
+      saOffer('jp', 'hd', new Date(2099, 11, 31, 12).toISOString()),
       saOffer('jp', 'sd', null, 'rent'),
       saOffer('jp', 'uhd', null, 'rent'),
       saOffer('ca', 'uhd', null),
@@ -625,7 +626,7 @@ const scenarios = [
       return problems;
     },
   }),
-  offerScenario('Title · offer details, upcoming expiry', 'Japan', ['Subscription · HD · Leaves on 31 Dec 2099', 'Rent · UHD']),
+  offerScenario('Title · offer details, upcoming expiry', 'Japan', ['Subscription · HD · Leaves on 31 Dec 2099', 'Rent · UHD', 'Rent · SD']),
   offerScenario('Title · offer details, UHD quality', 'Canada', ['Subscription · UHD']),
   offerScenario('Title · offer details, missing data', 'Germany', []),
   scenario('Title · languages, subtitles only', result(languagesInput), {
