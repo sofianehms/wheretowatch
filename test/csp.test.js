@@ -21,7 +21,7 @@ const allowedExternalOrigins = new Set(
   [...allowlist[1].matchAll(/['"](https?:\/\/[^'"]+)['"]/g)].map(([, origin]) => origin),
 );
 
-for (const file of ['index.html', 'test/states.html']) {
+for (const file of ['index.html', 'about.html', 'test/states.html']) {
   test(`${file} defines a strict CSP before loading resources`, () => {
     const html = readFileSync(file, 'utf8').replace(/<!--[^]*?-->/g, '');
     const head = html.match(/<head\b[^>]*>([^]*?)<\/head>/i)?.[1];

@@ -2,6 +2,7 @@ export default {
   name: 'wheretowatch',
   brand: 'wheretowatch',
   skip: 'Skip to content',
+  about: 'About and privacy',
   'attribution.tmdbName': 'TMDB',
   'attribution.tmdb': 'This website uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.',
   'attribution.justwatch': 'Availability data: JustWatch',

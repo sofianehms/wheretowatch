@@ -1,7 +1,7 @@
 import { installStateRules } from './states-sim.js';
+import { isUnderTapSize, minimumTargetSize } from './states/kit.js';
 
 const targets = 'button, a[href], input, select, summary, label:has(input[type="radio"]), [role="option"], [tabindex]';
-const minimumTargetSize = 44;
 
 function checkTargets(container) {
   const problems = [];
@@ -22,7 +22,7 @@ function checkTargets(container) {
       && [...target.parentElement.childNodes].some((node) => node !== target && node.textContent.trim());
     if (insideSentence) continue;
     const { width, height } = target.getBoundingClientRect();
-    if (width < minimumTargetSize || height < minimumTargetSize) {
+    if (isUnderTapSize(width) || isUnderTapSize(height)) {
       const label = target.getAttribute('aria-label') || target.textContent.trim() || target.id;
       problems.push(`<${target.localName}>${label ? ` "${label}"` : ''} is ${width} × ${height} px (minimum 44 × 44 px)`);
     }

@@ -1,6 +1,6 @@
 import { HttpError } from '../../src/api/http.js';
 import { render } from '../../src/render/search.js';
-import { checkNoOverflow } from './kit.js';
+import { checkNoOverflow, isUnderTapSize } from './kit.js';
 import { hrefFor } from './title-links.js';
 
 const title = (name, year, mediaType = 'movie', tmdbId = null) => ({
@@ -151,7 +151,7 @@ const scenarios = [
       if (!textOf(container, '.option__meta').includes('2023 · Movie')) problems.push('the year and type are missing');
       if (getComputedStyle(container.querySelector('.option__title mark')).textDecorationLine !== 'underline') problems.push('the matched part is not underlined');
       for (const option of options) {
-        if (option.getBoundingClientRect().height < 44) problems.push('an option is under 44 px tall');
+        if (isUnderTapSize(option.getBoundingClientRect().height)) problems.push('an option is under 44 px tall');
       }
       return problems;
     }),
@@ -176,7 +176,7 @@ const scenarios = [
     button?.click();
     if (!container.log.some(([name, value]) => name === 'retry' && value === 'harb')) problems.push('Retry does not call back');
     if (live(container) !== 'Search failed. TMDB did not answer in time. Try again.') problems.push(`the polite region does not announce the error: “${live(container)}”`);
-    if (button && button.getBoundingClientRect().height < 44) problems.push('the Retry action is not visible or is under 44 px');
+    if (button && isUnderTapSize(button.getBoundingClientRect().height)) problems.push('the Retry action is not visible or is under 44 px');
     if (container.querySelector('[role="status"]')?.getAttribute('aria-live') !== 'polite') problems.push('the status region is not polite');
     return problems;
   }),
@@ -186,7 +186,7 @@ const scenarios = [
     if (button?.textContent !== 'Check your key') return ['the Check your key action is missing'];
     const problems = [];
     if (live(container) !== 'Search failed. TMDB refused your key.') problems.push(`the polite region does not announce the refusal: “${live(container)}”`);
-    if (button.getBoundingClientRect().height < 44) problems.push('the Check your key action is not visible or is under 44 px');
+    if (isUnderTapSize(button.getBoundingClientRect().height)) problems.push('the Check your key action is not visible or is under 44 px');
     button.focus();
     if (document.activeElement !== button) problems.push('the Check your key action cannot take keyboard focus');
     button.click();

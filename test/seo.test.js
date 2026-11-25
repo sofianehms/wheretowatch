@@ -6,12 +6,13 @@ import { startServer, rootRelative } from '../scripts/serve.mjs';
 const read = (file) => readFileSync(file, 'utf8').replace(/<!--[^]*?-->/g, '');
 const index = read('index.html');
 const notFound = read('404.html');
+const about = read('about.html');
 const manifest = JSON.parse(readFileSync('manifest.webmanifest', 'utf8'));
 const strings = readFileSync('src/i18n/en/common.js', 'utf8');
 const meta = (html, name) => html.match(new RegExp(`<meta\\b[^>]*(?:name|property)="${name}"[^>]*>`, 'i'))?.[0];
 const content = (tag) => tag?.match(/\bcontent="([^"]*)"/)?.[1];
 
-for (const [file, html] of [['index.html', index], ['404.html', notFound]]) {
+for (const [file, html] of [['index.html', index], ['404.html', notFound], ['about.html', about]]) {
   test(`${file} has a short title, a short description and a language`, () => {
     const title = html.match(/<title\b[^>]*>([^<]*)<\/title>/)[1];
     assert.ok(title.length > 0 && title.length <= 60, `title length ${title.length}`);
