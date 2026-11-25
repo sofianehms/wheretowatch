@@ -97,22 +97,28 @@ function failureType(status) {
  * The retry wait is capped separately. Set retryOn429 to 'within-budget'
  * to surface the rate-limit error when Retry-After exceeds that cap.
  * An injected sleep(ms, signal) waits in milliseconds and should stop on abort.
- * Failures are reported to the diagnostics buffer; cancellations are not failures.
+ * Every failed attempt and retry wait is reported to the diagnostics buffer, including
+ * those a retry recovers from; cancellations are not failures.
  */
-export async function request(url, options) {
-  try {
-    return await send(url, options);
-  } catch (error) {
-    if (error.type !== 'aborted') recordError({ type: error.type, url });
-    throw error;
-  }
-}
-
-async function send(url, {
+export async function request(url, {
   headers, signal, timeoutMs = MAX_WAIT_MS, retryOn429 = false,
   fetchImpl = globalThis.fetch, sleep = delay, onResponse, redirect,
 } = {}) {
-  const attempt = () => run(url, signal, Math.min(timeoutMs, MAX_WAIT_MS), async (active) => {
+  // The only place that feeds the diagnostics buffer: one entry per failed step.
+  const report = async (step) => {
+    const note = (type) => {
+      if (type && type !== 'aborted') recordError({ type, url });
+    };
+    try {
+      const result = await step;
+      note(result?.type);
+      return result;
+    } catch (error) {
+      note(error.type);
+      throw error;
+    }
+  };
+  const attempt = () => report(run(url, signal, Math.min(timeoutMs, MAX_WAIT_MS), async (active) => {
     try {
       if (globalThis.navigator?.onLine === false) return { type: 'offline' };
       const response = await fetchImpl(url, { headers, signal: active, ...(redirect && { redirect }) });
@@ -131,18 +137,18 @@ async function send(url, {
     } catch {
       return { type: globalThis.navigator?.onLine === false ? 'offline' : 'network' };
     }
-  });
+  }));
 
   let result = await attempt();
   if (retryOn429 && result.type === 'rateLimited' &&
       (retryOn429 !== 'within-budget' || result.wait <= MAX_WAIT_MS)) {
-    await run(url, signal, null, async (active) => {
+    await report(run(url, signal, null, async (active) => {
       try {
         await sleep(Math.min(result.wait, MAX_WAIT_MS), active);
       } catch {
         throw new HttpError('network', url);
       }
-    });
+    }));
     result = await attempt();
   }
   if (result.type) throw new HttpError(result.type, url, result.status);
