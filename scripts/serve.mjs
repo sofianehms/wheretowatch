@@ -20,7 +20,8 @@ export function rootRelative(html, prefix = '') {
     (match, attr, rest) => `${attr}="${prefix}/${rest}"`);
 }
 
-export function startServer(root, port = 0, { prefix = '' } = {}) {
+// `override(pathname)` may return the content to serve instead of the file.
+export function startServer(root, port = 0, { prefix = '', override } = {}) {
   const base = path.resolve(root);
   const server = http.createServer((req, res) => {
     let pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
@@ -33,6 +34,11 @@ export function startServer(root, port = 0, { prefix = '' } = {}) {
     const file = path.resolve(base, '.' + pathname);
     const hidden = /(^|[\\/])(\.|node_modules|scripts|package)/.test(path.relative(base, file));
     if (!file.startsWith(base + path.sep) || hidden) { res.writeHead(404).end('Not found'); return; }
+    const replaced = override?.(pathname);
+    if (replaced !== undefined) {
+      res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' }).end(replaced);
+      return;
+    }
     fs.readFile(file, (err, data) => {
       if (err) {
         const nf = path.join(base, '404.html');
