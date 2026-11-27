@@ -286,9 +286,10 @@ export function renderClearDialog({ onCancel, onConfirm }) {
  * @param {boolean} [options.durable] False when keys last only for this visit.
  * @param {(provider: 'tmdb'|'sa', outcome: string) => void} [options.onChange] After a key is saved, removed or verified.
  * @param {() => void} [options.onCleared] Called after all data has been cleared.
+ * @param {(unsaved: boolean) => void} [options.onUnsavedChange] Whether a key field differs from its saved value.
  * @returns {HTMLElement} The screen, with `pending()`, `confirming()`, `dispose()`.
  */
-export function renderSettings({ settings, checkKey, quotaLimit, quotaStatus, cacheStats, sources, onCountryChange, durable = true, onChange = () => {}, onCleared = () => {} }) {
+export function renderSettings({ settings, checkKey, quotaLimit, quotaStatus, cacheStats, sources, onCountryChange, durable = true, onChange = () => {}, onCleared = () => {}, onUnsavedChange = () => {} }) {
   const root = el('div', 'settings');
   let countrySection;
   let diagnostics;
@@ -308,6 +309,7 @@ export function renderSettings({ settings, checkKey, quotaLimit, quotaStatus, ca
     usage?.refresh();
     diagnostics?.refresh();
     const first = [tmdb, sa].find((field) => field?.dirty());
+    onUnsavedChange(Boolean(first));
     for (const field of [tmdb, sa]) {
       if (field) field.save.className = field === first ? 'btn btn--primary' : 'btn btn--secondary';
     }
@@ -412,6 +414,8 @@ export function renderSettings({ settings, checkKey, quotaLimit, quotaStatus, ca
   root.dispose = () => {
     tmdb.abort();
     sa.abort();
+    // Leaving the screen drops the drafts.
+    onUnsavedChange(false);
   };
   root.append(keys, theme, data);
   return root;

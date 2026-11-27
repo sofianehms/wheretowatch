@@ -5,6 +5,7 @@ export default {
   'dismiss': 'Dismiss',
   'update.title': 'A new version is available',
   'update.action': 'Reload',
+  'update.blocked': 'Settings has unsaved changes, here or in another tab. Save them or leave Settings, then reload.',
   'offline.title': 'You’re offline',
   'offline.text': 'Search needs a connection. Titles you viewed stay readable below.',
   'quotaWarning.title': '{used} of {limit} monthly calls used',

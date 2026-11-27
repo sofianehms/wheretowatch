@@ -85,7 +85,8 @@ export async function checkPwa({ browser, origin, shotsDir }) {
 }
 
 /**
- * Visit, change the served cache name, reload, accept the banner: the new version runs after a single reload.
+ * Visit in two tabs, change the served cache name, reload, accept the banner: unsaved Settings edits, in either tab,
+ * hold the update back; without them the new version runs after a single reload of each tab.
  * @param {{browser: import('playwright-core').Browser, root: string, shotsDir: string}} options
  * @returns {Promise<string[]>} The problems found.
  */
@@ -100,6 +101,7 @@ export async function checkUpdate({ browser, root, shotsDir }) {
   const origin = `http://127.0.0.1:${server.address().port}`;
   const ctx = await browser.newContext({ viewport, isMobile: true, hasTouch: true });
   try {
+    await ctx.route(`${api}3/**`, (route) => route.fulfill({ json: {} }));
     const page = await ctx.newPage();
     page.on('console', (message) => { if (message.type() === 'error') problems.add(`console error: ${message.text()}`); });
     page.on('pageerror', (error) => problems.add(`page error: ${error.message}`));
@@ -112,6 +114,16 @@ export async function checkUpdate({ browser, root, shotsDir }) {
     // A second load puts the page under the control of the worker, as on any later visit.
     await page.reload();
     expect(await banner.count() === 0, 'the banner shows without a new version');
+    expect(await page.evaluate(() => Boolean(navigator.serviceWorker.controller)), 'the page is not controlled before the update');
+
+    // Another tab of the app, left on Settings later on.
+    const other = await ctx.newPage();
+    other.on('pageerror', (error) => problems.add(`page error: ${error.message}`));
+    let otherLoads = 0;
+    other.on('load', () => { otherLoads += 1; });
+    await other.addInitScript(() => localStorage.setItem('wtw.key.tmdb', 'fixture-placeholder'));
+    await other.goto(`${origin}/`);
+    await page.bringToFront();
 
     served = worker.replace(current, next);
     await page.reload();
@@ -129,14 +141,39 @@ export async function checkUpdate({ browser, root, shotsDir }) {
       await page.screenshot({ path: path.join(shotsDir, `pwa-update-${theme}.png`), fullPage: true });
     }
 
-    loads = 0;
-    const reloaded = page.waitForEvent('load');
-    await banner.getByRole('button', { name: 'Reload' }).click();
+    // A draft in the other tab, then in this one: nothing is activated, nothing reloads, the draft stays.
+    const reload = banner.getByRole('button', { name: 'Reload' });
+    const blocked = banner.filter({ hasText: 'unsaved changes' });
+    const heldBack = async (tab, where) => {
+      await tab.bringToFront();
+      await tab.getByRole('button', { name: 'Settings' }).click();
+      const draft = tab.locator('#settings input[type="password"]').nth(1);
+      await draft.fill('draft');
+      loads = otherLoads = 0;
+      await page.bringToFront();
+      await reload.click();
+      await blocked.waitFor();
+      expect(await reload.evaluate((element) => element === document.activeElement), 'the focus left "Reload"');
+      await page.waitForTimeout(500);
+      expect(loads === 0 && otherLoads === 0, `a tab reloaded despite a draft in ${where}`);
+      expect(await draft.inputValue() === 'draft', `the draft in ${where} was lost`);
+      expect(await page.evaluate(async () => Boolean((await navigator.serviceWorker.getRegistration()).waiting)),
+        `the new version was activated despite a draft in ${where}`);
+      await page.screenshot({ path: path.join(shotsDir, 'pwa-update-held-back.png'), fullPage: true });
+      await tab.getByRole('button', { name: 'Back to search' }).click();
+    };
+    await heldBack(other, 'another tab');
+    await heldBack(page, 'this tab');
+
+    loads = otherLoads = 0;
+    const reloaded = Promise.all([page.waitForEvent('load'), other.waitForEvent('load')]);
+    await reload.click();
     await reloaded;
     await workerActivated(page);
     // Leaves time for an unwanted second reload to happen.
     await page.waitForTimeout(1500);
     expect(loads === 1, `${loads} reloads after "Reload", expected 1`);
+    expect(otherLoads === 1, `${otherLoads} reloads of the other tab, expected 1`);
     const state = await page.evaluate(async () => ({
       caches: await caches.keys(),
       waiting: Boolean((await navigator.serviceWorker.getRegistration()).waiting),

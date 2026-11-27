@@ -41,7 +41,7 @@ function checkRegion(slot, expected) {
 }
 
 // The real shell with a TMDB key (and optionally a second one) saved.
-function mountApp(container, stored, { used = 0, snapshots } = {}) {
+function mountApp(container, stored, { used = 0, snapshots, onUnsavedChange } = {}) {
   container.innerHTML = '<div id="header"></div><div id="welcome" hidden></div><div id="settings" hidden></div>'
     + '<section id="search-view" hidden><div id="banners"></div><div id="search"></div><div id="title"></div></section>';
   const storage = memoryStorage(stored);
@@ -60,7 +60,7 @@ function mountApp(container, stored, { used = 0, snapshots } = {}) {
   startApp({
     store, settings, quota, sources, getTitle: async () => title,
     checkKey: async () => 'valid', quotaLimit: () => quota.status().limit, durable: true,
-  }, container, { launchTitle: snapshots ? title.ref : null });
+  }, container, { launchTitle: snapshots ? title.ref : null, onUnsavedChange });
   return { store, settings, loads: () => loads };
 }
 
@@ -208,6 +208,63 @@ export default [
       if (action.getBoundingClientRect().height < 44) problems.push('the button is smaller than a tap target');
       action.click();
       if (container.asked.join() !== 'reload') problems.push('the button does not ask for the reload');
+      return problems;
+    },
+  },
+  {
+    name: 'Banner · unsaved edits are reported until saved, reverted, left or erased',
+    async render(container) {
+      let unsaved = false;
+      container.seen = [];
+      mountApp(container, { 'wtw.key.tmdb': 'sample-tmdb-key' }, { onUnsavedChange: (value) => { unsaved = value; } });
+      const record = (step) => container.seen.push(`${step}:${unsaved}`);
+      const header = (name) => container.querySelector(`#header button[aria-label="${name}"]`).click();
+      const button = (name, index = 0) => [...container.querySelectorAll('#settings button')].filter((node) => node.textContent === name)[index].click();
+      const type = (index, value) => {
+        const input = container.querySelectorAll('#settings input[type="password"]')[index];
+        input.value = value;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+      header('Settings');
+      record('opened');
+      type(1, 'draft');
+      record('typed');
+      type(1, '');
+      record('reverted');
+      type(0, '');
+      record('emptied');
+      header('Back to search');
+      await settle();
+      record('left');
+      header('Settings');
+      await settle();
+      type(1, 'sample-sa-key');
+      button('Save', 1);
+      await settle();
+      record('saved');
+      type(1, 'draft');
+      button('Clear my data');
+      button('Clear data');
+      await settle();
+      record('erased');
+      // Only the reports are checked; erasure leaves the focused welcome heading, which is not a tap target.
+      container.replaceChildren();
+    },
+    check(container) {
+      const expected = 'opened:false typed:true reverted:false emptied:true left:false saved:false erased:false';
+      return container.seen.join(' ') === expected ? [] : [`unexpected reports: ${container.seen.join(' ')}`];
+    },
+  },
+  {
+    name: 'Banner · new version held back by unsaved changes',
+    render(container) {
+      container.region = slotIn(container);
+      renderBanners(container.region, [updateBanner({ blocked: true })]);
+    },
+    check(container) {
+      const problems = checkRegion(container.region, 1);
+      if (!/unsaved changes.*another tab/.test(container.region.textContent)) problems.push('the reason is not given');
+      if (!container.region.querySelector('button')) problems.push('the "Reload" button is gone');
       return problems;
     },
   },

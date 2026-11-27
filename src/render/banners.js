@@ -20,11 +20,11 @@ export const offlineBanner = () => ({
   message: t('banners.offline.text'),
 });
 
-export const updateBanner = () => ({
+export const updateBanner = ({ blocked = false } = {}) => ({
   type: 'update',
   icon: 'refresh',
   title: t('banners.update.title'),
-  message: '',
+  message: blocked ? t('banners.update.blocked') : '',
   action: { label: t('banners.update.action'), name: 'reload', className: 'btn btn--secondary' },
 });
 

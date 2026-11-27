@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parse } from 'acorn';
 
-import { watchForUpdate } from '../src/sw-update.js';
+import { createEditGuard, watchForUpdate } from '../src/sw-update.js';
 import { sw } from './shell-fixture.js';
 
 function* nodes(node, ancestors = []) {
@@ -86,17 +86,21 @@ class FakeNode extends EventTarget {
   }
 }
 
-async function setup(t, { active = true, waiting = null, installing = null, controller = {} } = {}) {
+async function setup(t, { active = true, waiting = null, installing = null, controller = {}, unsavedEdits } = {}) {
   const previous = globalThis.document;
   globalThis.document = { createElement: () => new FakeNode(), createElementNS: () => new FakeNode() };
   t.after(() => { globalThis.document = previous; });
   const container = Object.assign(new EventTarget(), { controller });
   const registration = Object.assign(new EventTarget(), { active: active ? new FakeWorker() : null, waiting, installing });
-  const slot = new FakeNode();
+  const slot = Object.assign(new FakeNode(), { querySelector: () => null });
   const page = { container, registration, slot, reloads: 0 };
-  await watchForUpdate(container, Promise.resolve(registration), slot, () => { page.reloads += 1; });
+  await watchForUpdate(container, Promise.resolve(registration), slot, () => { page.reloads += 1; }, unsavedEdits);
   page.button = () => slot.find((node) => node.type === 'button' || /\bbtn\b/.test(node.className));
-  page.press = () => page.button().dispatchEvent(new Event('click'));
+  page.press = () => {
+    page.button().dispatchEvent(new Event('click'));
+    // The edits are asked for before anything happens.
+    return new Promise((resolve) => setImmediate(resolve));
+  };
   page.takeOver = () => container.dispatchEvent(new Event('controllerchange'));
   return page;
 }
@@ -123,7 +127,7 @@ test('a version already waiting is offered, and nothing happens until asked', as
 test('Reload sends SKIP_WAITING, then reloads once when the new version takes control', async (t) => {
   const page = await setup(t);
   const worker = install(page);
-  page.press();
+  await page.press();
   assert.deepEqual(worker.messages, [{ type: 'SKIP_WAITING' }]);
   assert.equal(page.reloads, 0);
   worker.become('activating');
@@ -152,7 +156,7 @@ test('the first installation shows no banner and never reloads', async (t) => {
 test('a page without a controller reloads once the requested version is active', async (t) => {
   const page = await setup(t, { controller: null });
   const worker = install(page);
-  page.press();
+  await page.press();
   worker.become('activated');
   assert.equal(page.reloads, 1);
 });
@@ -168,6 +172,73 @@ test('Reload still works when nothing waits any more', async (t) => {
   const page = await setup(t, { controller: null });
   install(page);
   page.registration.waiting = null;
-  page.press();
+  await page.press();
   assert.equal(page.reloads, 1);
+});
+
+test('nothing is activated while a tab has unsaved edits, and the banner says why', async (t) => {
+  let unsaved = true;
+  const page = await setup(t, { unsavedEdits: async () => unsaved });
+  const worker = install(page);
+  await page.press();
+  await page.press();
+  assert.deepEqual(worker.messages, []);
+  assert.equal(page.reloads, 0);
+  assert.ok(page.slot.find((node) => node.children.some((child) => /unsaved changes/.test(child))), 'no explanation');
+  unsaved = false;
+  await page.press();
+  assert.deepEqual(worker.messages, [{ type: 'SKIP_WAITING' }]);
+});
+
+test('unsaved edits also hold back the reload of a version already activated', async (t) => {
+  const page = await setup(t, { controller: null, unsavedEdits: async () => true });
+  install(page);
+  page.registration.waiting = null;
+  await page.press();
+  assert.equal(page.reloads, 0);
+});
+
+// Shared locks, as much of them as the guard uses; one instance stands for all the tabs.
+function fakeLocks() {
+  const held = new Set();
+  return {
+    async request(name, options, callback) {
+      const lock = { name };
+      held.add(lock);
+      await callback(lock);
+      held.delete(lock);
+    },
+    query: async () => ({ held: [...held] }),
+  };
+}
+
+const released = () => new Promise((resolve) => setImmediate(resolve));
+
+test('unsaved edits are known to every tab until each one has none left', async () => {
+  const locks = fakeLocks();
+  const [first, second, asking] = [createEditGuard(locks), createEditGuard(locks), createEditGuard(locks)];
+  assert.equal(await asking.anywhere(), false);
+  first.set(true);
+  first.set(true);
+  second.set(true);
+  assert.equal(await asking.anywhere(), true);
+  first.set(false);
+  first.set(false);
+  await released();
+  assert.equal(await asking.anywhere(), true);
+  second.set(false);
+  await released();
+  assert.equal(await asking.anywhere(), false);
+  assert.equal((await locks.query()).held.length, 0);
+});
+
+test('without the Web Locks API, or when it refuses, a tab still knows its own edits', async () => {
+  for (const locks of [null, { request: async () => { throw new Error('refused'); }, query: async () => { throw new Error('refused'); } }]) {
+    const guard = createEditGuard(locks);
+    assert.equal(await guard.anywhere(), false);
+    guard.set(true);
+    assert.equal(await guard.anywhere(), true);
+    guard.set(false);
+    assert.equal(await guard.anywhere(), false);
+  }
 });

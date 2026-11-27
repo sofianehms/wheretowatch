@@ -1,13 +1,42 @@
 // "A new version is available": activates a waiting service worker only when the user asks.
 import { renderBanners, updateBanner } from './render/banners.js';
 
+const EDITS = 'wtw-unsaved-edits';
+
+/**
+ * Tells every tab whether one of them holds unsaved edits: such a tab keeps a shared lock, released with the edits
+ * or when the tab closes. Without the Web Locks API only this tab is known.
+ * @param {LockManager} [locks]
+ */
+export function createEditGuard(locks = globalThis.navigator?.locks) {
+  let release = null;
+  return {
+    set(unsaved) {
+      if (unsaved === Boolean(release)) return;
+      if (!unsaved) {
+        release();
+        release = null;
+        return;
+      }
+      const done = new Promise((resolve) => { release = resolve; });
+      locks?.request(EDITS, { mode: 'shared' }, () => done).catch(() => {});
+    },
+    async anywhere() {
+      if (release) return true;
+      const state = await locks?.query().catch(() => null);
+      return Boolean(state?.held.some(({ name }) => name === EDITS));
+    },
+  };
+}
+
 /**
  * @param {ServiceWorkerContainer} container
  * @param {Promise<ServiceWorkerRegistration>} registering
  * @param {Element} slot Where the banner is announced.
  * @param {() => void} reload
+ * @param {() => Promise<boolean>} [unsavedEdits] True while a reload, in any tab, would lose edits.
  */
-export async function watchForUpdate(container, registering, slot, reload) {
+export async function watchForUpdate(container, registering, slot, reload, unsavedEdits = async () => false) {
   let reloaded = false;
   const reloadOnce = () => {
     if (!reloaded) reload();
@@ -19,7 +48,14 @@ export async function watchForUpdate(container, registering, slot, reload) {
 
   const registration = await registering;
   const banners = [updateBanner()];
-  const activate = () => {
+  const activate = async () => {
+    // Activation reloads every tab, so it waits until none of them has anything to lose.
+    if (await unsavedEdits()) {
+      renderBanners(slot, [updateBanner({ blocked: true })], { onAction: activate });
+      // The pressed button was redrawn.
+      slot.querySelector('button')?.focus();
+      return;
+    }
     const worker = registration.waiting;
     // Nothing waits any more: it was activated meanwhile.
     if (!worker) return reloadOnce();
