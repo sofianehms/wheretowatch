@@ -1,9 +1,10 @@
-// Minimal offline shell cache. A new worker waits and activates on the next launch. Bump CACHE when shipped files change.
-const CACHE = 'shell-v27';
+// Minimal offline shell cache. A new worker waits and activates on the next launch,
+// or as soon as the user asks for it. Bump CACHE when shipped files change.
+const CACHE = 'shell-v28';
 const SHELL = [
   './', 'index.html', 'about.html', 'src/about.js', 'src/render/about.js', 'design/tokens.css', 'src/styles.css',
   'src/styles/search.css', 'src/styles/settings.css', 'src/styles/banners.css', 'src/styles/about.css', 'src/styles/install.css', 'src/styles/footer.css',
-  'src/theme-boot.js', 'src/theme.js', 'src/main.js', 'src/app.js', 'src/compose.js', 'src/state.js',
+  'src/theme-boot.js', 'src/theme.js', 'src/main.js', 'src/sw-update.js', 'src/app.js', 'src/compose.js', 'src/state.js',
   'manifest.webmanifest', 'src/api/cache.js', 'src/api/diagnostics.js', 'src/api/http.js', 'src/api/keycheck.js', 'src/api/quota.js',
   'src/api/sources.js', 'src/config.js', 'src/settings/keys.js', 'src/core/images.js', 'src/core/typeahead.js', 'src/core/url.js', 'src/api/tmdb.js',
   'src/core/normalize.js', 'src/data/services.js',
@@ -28,6 +29,9 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(
     keys.filter((key) => key !== CACHE && /^shell-v\d+$/.test(key)).map((key) => caches.delete(key))
   )));
+});
+self.addEventListener('message', (e) => {
+  if (e.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 self.addEventListener('fetch', (e) => {
   // Shell only: same-origin GET requests. Cross-origin requests (API calls) are never intercepted,

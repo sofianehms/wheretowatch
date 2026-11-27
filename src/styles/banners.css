@@ -1,6 +1,7 @@
 /* Banners (quota, offline, update). */
 /* ---------- Banners ---------- */
 .banners { display: grid; gap: var(--space-2); margin: var(--space-2) 0 var(--space-4); }
+.banners:empty { margin: 0; }
 .banner {
   display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-3); align-items: start;
   padding: var(--space-3) var(--space-4); background: var(--color-surface);

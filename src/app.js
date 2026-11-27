@@ -11,12 +11,15 @@ import { applyTheme } from './theme.js';
  * Show the right screen for the stored keys and the navigation state.
  * @param {ReturnType<typeof import('./compose.js').compose>} app The composed services.
  * @param {ParentNode} root Where the screen slots (`#header`, `#welcome`, `#settings`, `#search-view`, `#search`) live.
- * @param {{launchQuery?: string | null, launchTitle?: string | null, onTitleLaunchComplete?: () => void, online?: boolean}} [options]
+ * @param {{launchQuery?: string | null, launchTitle?: string | null, onTitleLaunchComplete?: () => void, online?: boolean,
+ *   onUnsavedChange?: (unsaved: boolean) => void}} [options]
  *   A title link or query runs when the search screen first becomes available.
+ *   `onUnsavedChange` follows whether the screen holds edits that a reload would lose.
  * @returns {{setOnline: (online: boolean) => void}} Called when the network is lost or comes back.
  */
 export function startApp(app, root = document, {
   launchQuery = null, launchTitle = null, onTitleLaunchComplete, online = globalThis.navigator?.onLine !== false,
+  onUnsavedChange,
 } = {}) {
   const { store, settings } = app;
 
@@ -278,6 +281,7 @@ export function startApp(app, root = document, {
         quotaStatus: app.quota?.status,
         cacheStats: app.cache?.stats,
         durable: app.durable,
+        onUnsavedChange,
         // The first saved key ends the first run: go back to search.
         onChange: () => {
           // An unverified key stays on screen so the user can read the outcome and test again.
