@@ -30,6 +30,6 @@ if (t === null) cleanLaunchUrl();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   const registering = navigator.serviceWorker.register('sw.js');
-  watchForUpdate(navigator.serviceWorker, registering, document.getElementById('update'), () => location.reload(), edits.anywhere)
+  watchForUpdate(navigator.serviceWorker, registering, document.getElementById('update'), () => location.reload(), edits)
     .catch(() => {});
 }
