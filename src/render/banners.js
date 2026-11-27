@@ -20,6 +20,14 @@ export const offlineBanner = () => ({
   message: t('banners.offline.text'),
 });
 
+export const updateBanner = () => ({
+  type: 'update',
+  icon: 'refresh',
+  title: t('banners.update.title'),
+  message: '',
+  action: { label: t('banners.update.action'), name: 'reload', className: 'btn btn--secondary' },
+});
+
 export const DEGRADATION_TYPES = new Set(['quotaReached', 'quotaWarning', 'sourceError']);
 
 const caution = (type, title, message, extra) => ({ type, tone: 'caution', title, message, ...extra });
@@ -88,7 +96,7 @@ function drawBanner(banner, { onAction, onDismiss }) {
   const body = el('div', '', title ? '' : message);
   if (title) body.append(el('span', 'banner__title', title), message);
   if (action) {
-    const open = el('button', 'link', action.label, { type: 'button' });
+    const open = el('button', action.className ?? 'link', action.label, { type: 'button' });
     open.addEventListener('click', () => onAction?.(action.name, banner));
     body.append(' ', el('span', 'banner__actions'));
     body.lastChild.append(open);

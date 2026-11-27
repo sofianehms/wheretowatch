@@ -1,7 +1,7 @@
 import { createCache } from '../../src/api/cache.js';
 import { createQuota } from '../../src/api/quota.js';
 import { startApp } from '../../src/app.js';
-import { degradationBanners, renderBanners, tmdbOnlyBanner } from '../../src/render/banners.js';
+import { degradationBanners, renderBanners, tmdbOnlyBanner, updateBanner } from '../../src/render/banners.js';
 import { reconcile } from '../../src/core/reconcile.js';
 import { computeVerdict } from '../../src/core/verdict.js';
 import { renderTitle } from '../../src/render/title.js';
@@ -193,6 +193,24 @@ const plain = { type: 'info', message: 'Plain notice, no action.' };
 
 export default [
   ...degradationScenarios,
+  {
+    name: 'Banner · new version available',
+    render(container) {
+      container.region = slotIn(container);
+      container.asked = [];
+      renderBanners(container.region, [updateBanner()], { onAction: (name) => container.asked.push(name) });
+    },
+    check(container) {
+      const problems = checkRegion(container.region, 1);
+      const action = container.region.querySelector('.banner__actions button');
+      if (container.region.querySelector('.banner__title')?.textContent !== 'A new version is available') problems.push('the title is wrong');
+      if (action?.textContent !== 'Reload') return [...problems, 'the "Reload" button is missing'];
+      if (action.getBoundingClientRect().height < 44) problems.push('the button is smaller than a tap target');
+      action.click();
+      if (container.asked.join() !== 'reload') problems.push('the button does not ask for the reload');
+      return problems;
+    },
+  },
   {
     name: 'Banner · single, without an action',
     render(container) {

@@ -5,6 +5,7 @@ import { cleanUrl, readLaunchParams } from './core/url.js';
 import { applyStaticStrings } from './i18n/strings.js';
 import { renderFooter } from './render/attribution.js';
 import { renderInstallHint } from './render/install.js';
+import { watchForUpdate } from './sw-update.js';
 
 applyStaticStrings(document);
 renderFooter(document.getElementById('footer'));
@@ -26,5 +27,7 @@ addEventListener('offline', () => screens.setOnline(false));
 if (t === null) cleanLaunchUrl();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const registering = navigator.serviceWorker.register('sw.js');
+  watchForUpdate(navigator.serviceWorker, registering, document.getElementById('update'), () => location.reload())
+    .catch(() => {});
 }
