@@ -98,7 +98,7 @@ Replace the sample URL with your real repository URL. Review each provider's ter
 ## 🌍 Coverage and verdicts
 
 * Coverage varies by title, service, country and source. Series results describe the whole series and can miss season-level differences.
-* **Available** means at least one source reports an offer. **Confirmed** means both sources agree on the offer. The app flags single-source rows and disagreements where applicable.
+* **Available** means at least one source reports an offer. In a service’s country list, **Confirmed** means both sources list that service in the same country. Offer types can differ, so check each source to see whether it lists a subscription, rental or another offer type. The app flags single-source rows and disagreements where applicable.
 * **Not found** means the sources report offers for the title but found none for the selected service in the covered countries. **Not enough data** means the app cannot draw a conclusion. An unrecognized title, an uncovered country or an API error can leave gaps.
 * Check the source and retrieval date, especially when using saved results. Country counts are withheld when coverage is unknown. Playback depends on your location and the service's terms. Verify the current offer with the streaming service before subscribing or paying.
 
